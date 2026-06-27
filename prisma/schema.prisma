@@ -27,16 +27,17 @@ model Profile {
 }
 
 model Project {
-  id          String       @id @default(uuid()) @db.Uuid
-  name        String
-  gitUrl      String
-  description String?
-  ownerId     Int
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  deployments Deployment[]
-  FailedJob   FailedJob[]
-  owner       User         @relation(fields: [ownerId], references: [id])
+  id           String               @id @default(uuid()) @db.Uuid
+  name         String
+  gitUrl       String
+  description  String?
+  ownerId      Int
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  deployments  Deployment[]
+  FailedJob    FailedJob[]
+  architecture ProjectArchitecture?
+  owner        User                 @relation(fields: [ownerId], references: [id])
 
   @@index([name])
   @@index([gitUrl])
@@ -115,4 +116,49 @@ enum FailedJobStatus {
   RESOLVED
   ESCALATED
   DISCARDED
+}
+
+enum ArchitectureStatus {
+  IN_PROGRESS
+  COMPLETED
+}
+
+model ProjectArchitecture {
+  id             String             @id @default(uuid()) @db.Uuid
+  projectId      String             @unique @db.Uuid
+
+  // User's answers from questionnaire (Original)
+  appType        String?            // webapp, api, microservices, realtime
+  scale          String?            // small, medium, large
+  database       String?            // relational, document, both
+  features       Json?              // ["auth", "cache", "queue", ...]
+  traffic        String?            // steady, spiky, growing
+  budget         String?            // minimal, moderate, flexible
+
+  // Phase 1: New enterprise fields
+  resourceTier      String?         // starter, standard, performance, dedicated
+  compliance        Json?           // ["none"] or ["soc2", "hipaa", "gdpr", "pci", "iso27001"]
+  teamSize          String?         // solo, small, medium, large
+  availability      String?         // standard, high, critical
+  networkIsolation  String?         // shared, dedicated_vlan, private
+  managedLevel      String?         // templates_only, semi_managed, full_managed
+
+  // Current step for resume capability
+  currentStep    String?            // tracks which question user is on
+
+  // Status
+  status         ArchitectureStatus @default(IN_PROGRESS)
+
+  // AI Generated recommendation
+  recommendation Json?
+
+  // Timestamps
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  completedAt    DateTime?
+
+  // Relation
+  project        Project            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([status])
 }

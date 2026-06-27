@@ -11,21 +11,69 @@ const dotenv = require('dotenv');
 const envPath = path.resolve(__dirname, '.env');
 dotenv.config({ path: envPath });
 
-// Log the loaded configuration
-console.log('========= SERVICE CONFIGURATION =========');
-console.log('NODE_ENV:', process.env.NODE_ENV || 'development');
-console.log('Redis URL:', process.env.REDIS_URL ? 'Configured' : 'Not set');
-console.log('Database URL:', process.env.DATABASE_URL ? 'Configured' : 'Not set');
-console.log('Kafka Broker:', process.env.KAFKA_BROKER || 'Not set');
-console.log('ClickHouse Host:', process.env.CLICKHOUSE_HOST || 'Not set');
-console.log('=========================================');
+// Log the loaded configuration (only in development)
+if (process.env.NODE_ENV !== 'production') {
+    console.log('========= SERVICE CONFIGURATION =========');
+    console.log('NODE_ENV:', process.env.NODE_ENV || 'development');
+    console.log('Redis:', process.env.REDIS_URL ? 'Configured' : 'Not set');
+    console.log('Database:', process.env.DATABASE_URL ? 'Configured' : 'Not set');
+    console.log('Kafka:', process.env.KAFKA_BROKER ? 'Configured' : 'Not set');
+    console.log('ClickHouse:', process.env.CLICKHOUSE_HOST ? 'Configured' : 'Not set');
+    console.log('=========================================');
+}
 
 const cors = require('cors');
+const cookieParser = require('cookie-parser');
+const helmet = require('helmet');
 const buildQueue = require('./queues/buildQueue');
 const githubRoutes = require('./routes/githubRoutes');
 const authRoutes = require('./routes/autthRoutes');
 const chatbotRoutes = require("./routes/chatBotRoutes");
+const archChatRoutes = require('./routes/archChatRoutes');
+const archChat = require('./services/archChat');
 const { getRedisClient } = require('./utils/redisClient');
+
+// Server instance (assigned later)
+let server;
+
+// Graceful shutdown handler
+let isShuttingDown = false;
+function gracefulShutdown(signal) {
+    if (isShuttingDown) return;
+    isShuttingDown = true;
+    console.log(`\n[Server] ${signal} received. Shutting down gracefully...`);
+    
+    // Stop accepting new connections
+    if (server) {
+        server.close(async () => {
+            console.log('[Server] HTTP server closed');
+            
+            // Close Redis connection
+            try {
+                const redis = getRedisClient();
+                if (redis) await redis.quit();
+                console.log('[Server] Redis connection closed');
+            } catch (e) { /* ignore */ }
+            
+            // Close database connection
+            try {
+                await prisma.$disconnect();
+                console.log('[Server] Database connection closed');
+            } catch (e) { /* ignore */ }
+            
+            process.exit(0);
+        });
+    }
+    
+    // Force exit after 10 seconds
+    setTimeout(() => {
+        console.error('[Server] Forced shutdown after timeout');
+        process.exit(1);
+    }, 10000);
+}
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 // Initialize Redis client early
 process.env.REDIS_ENABLED = 'true';
@@ -35,7 +83,26 @@ const aiAnalysisRoutes = require('./routes/aiAnalysisRoutes');
 const { Worker: ThreadWorker } = require('worker_threads');
 
 const app = express();
-app.use(cors({ origin: '*' })); //main cross origin middleware to allow traffic from anywhere
+
+// Security headers
+app.use(helmet({
+    contentSecurityPolicy: process.env.NODE_ENV === 'production',
+    crossOriginEmbedderPolicy: false // Allow embedding if needed
+}));
+
+// CORS configuration - restrict origins for security
+const corsOptions = {
+    origin: process.env.ALLOWED_ORIGINS?.split(',') || [
+        'http://localhost:3000',
+        'http://localhost:5173', 
+        'http://localhost:4200'
+    ],
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+};
+app.use(cors(corsOptions));
+app.use(cookieParser());
 
 const PORT = 5000;
 
@@ -62,21 +129,17 @@ app.use('/api/validdeployment', deploymentValidationRoutes);
 app.use('/api/ai-analysis', aiAnalysisRoutes);
 //chatBot routes
 app.use('/api/llm', chatbotRoutes);
+//architecture chat routes (guided flow)
+app.use('/api/arch-chat', archChatRoutes);
 //auth routes
 
 async function main() {
-    // Log to indicate the connection attempt
-    // console.log('Attempting to connect to the database...');
-
     try {
-        // Run a simple query to test the connection
-        const users = await prisma.user.findMany();
-
-        // Log successful query result
-        console.log('Successfully connected to the database and fetched users:', users);
+        // Test database connection with a simple count query
+        const userCount = await prisma.user.count();
+        console.log(`Database connected successfully. Users: ${userCount}`);
     } catch (error) {
-        // Log any error that happens during the query
-        console.error('Error connecting to the database or fetching users:', error);
+        console.error('Error connecting to the database:', error.message);
     }
 }
 const startWorkerThreads = () => {
@@ -138,10 +201,10 @@ app.post('/create-project', async function (req, res) {
         });
     }
     catch (e) {
-        res.status(401).send({
-            succsee: false,
-            message: 'problem for creating project',
-            error: e.message
+        res.status(500).send({
+            success: false,
+            message: 'Problem creating project',
+            error: process.env.NODE_ENV === 'development' ? e.message : undefined
         });
     }
 });
@@ -173,10 +236,10 @@ app.get("/projects/:ownerId", async function (req, res) {
         });
     }
     catch (e) {
-        return res.status(404).send({
+        return res.status(500).send({
             success: false,
-            message: 'response error from api',
-            error: e.message
+            message: 'Error fetching projects',
+            error: process.env.NODE_ENV === 'development' ? e.message : undefined
         });
     }
 });
@@ -266,8 +329,8 @@ app.post('/deploy', async (req, res) => {
     catch (e) {
         return res.status(500).send({
             success: false,
-            message: 'internal service error for building deployment',
-            error: e.message
+            message: 'Internal service error for deployment',
+            error: process.env.NODE_ENV === 'development' ? e.message : undefined
         });
     }
 });
@@ -285,7 +348,10 @@ app.get("/api/project/:id", async (req, res) => {
         }
         res.json(project);
     } catch (error) {
-        return res.status(500).json({ error: 'Failed to fetch project', 'msg': error.message });
+        return res.status(500).json({ 
+            error: 'Failed to fetch project',
+            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 });
 
@@ -316,12 +382,17 @@ app.get('/getLogs/:id', async function (req, res) {
         res.status(500).json({
             success: false,
             message: 'Internal error',
-            error: e.message
+            error: process.env.NODE_ENV === 'development' ? e.message : undefined
         });
     }
 });
 //main test for checking pg connection
 main();
+
+// Initialize Architecture Chat service
+archChat.initialize().catch(err => {
+    console.error('[ArchChat] Initialization error:', err.message);
+});
 
 //starting worker threads
 
@@ -329,7 +400,7 @@ main();
 startWorkerThreads();
 
 //start server
-app.listen(PORT, () => console.log(`API Server Running..${PORT}`));
+server = app.listen(PORT, () => console.log(`API Server Running..${PORT}`));
 
 //exporting app
 module.exports = app;  // Export the app for testing purposes

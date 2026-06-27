@@ -1,8 +1,10 @@
 const { Queue } = require('bullmq');
 const Redis = require('ioredis');
 
-// Environment variables are loaded by index.js
-console.log('webHookQueue: Redis URL configured:', process.env.REDIS_URL ? 'YES' : 'NO');
+// Only log in development
+if (process.env.NODE_ENV !== 'production') {
+    console.log('webHookQueue: Redis configured:', process.env.REDIS_URL ? 'YES' : 'NO');
+}
 
 // Create Redis connection for BullMQ
 const getRedisConnection = () => {

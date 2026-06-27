@@ -70,7 +70,7 @@ class ReactProjectValidator {
     } catch (error) {
       return {
         isValid: false,
-        error: error.message
+        error: process.env.NODE_ENV === 'development' ? error.message : 'Validation failed'
       };
     }
   }
@@ -207,7 +207,7 @@ class ReactProjectValidator {
     } catch (error) {
       return {
         isValid: false,
-        error: error.message
+        error: process.env.NODE_ENV === 'development' ? error.message : 'Validation failed'
       };
     }
   }

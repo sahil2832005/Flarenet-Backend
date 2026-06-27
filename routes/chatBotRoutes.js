@@ -2,6 +2,7 @@ const express = require("express");
 const { chatbotController } = require("../utils/features/chatBotController");
 const router = express.Router();
 const createRateLimiter = require("../middlewares/tokenBucketLimiter");
+const { verifyToken } = require("../middlewares/authMiddleware");
 
 // Rate limiter configuration for chat endpoint
 
@@ -29,6 +30,6 @@ const chatRateLimiter = createRateLimiter({
     failOpen: false // Don't allow requests if Redis is down - better for testing
 });
 
-router.post("/chat", chatRateLimiter, chatbotController);
+router.post("/chat", verifyToken, chatRateLimiter, chatbotController);
 
 module.exports = router;

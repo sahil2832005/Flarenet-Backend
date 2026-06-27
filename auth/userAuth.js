@@ -3,16 +3,58 @@ const { prisma } = require('../utils/prismaClient');
 const jwt = require('jsonwebtoken');
 require('dotenv').config({ path: '../.env' });
 
+/**
+ * Validates password complexity
+ * @param {string} password 
+ * @returns {string|null} Error message or null if valid
+ */
+const validatePassword = (password) => {
+    if (!password || password.length < 8) {
+        return 'Password must be at least 8 characters';
+    }
+    if (!/[A-Z]/.test(password)) {
+        return 'Password must contain at least one uppercase letter';
+    }
+    if (!/[a-z]/.test(password)) {
+        return 'Password must contain at least one lowercase letter';
+    }
+    if (!/[0-9]/.test(password)) {
+        return 'Password must contain at least one number';
+    }
+    return null;
+};
+
+/**
+ * Validates email format
+ * @param {string} email 
+ * @returns {boolean}
+ */
+const isValidEmail = (email) => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+};
+
 const registerUser = async (req, res) => {
     try {
         const { email, password, name } = req.body;
 
-        //valildate input
+        // Validate input
         if (!email || !password) {
             return res.status(400).json({ error: "Email and password are required" });
         }
 
-        //check if user exists
+        // Validate email format
+        if (!isValidEmail(email)) {
+            return res.status(400).json({ error: "Invalid email format" });
+        }
+
+        // Validate password complexity
+        const passwordError = validatePassword(password);
+        if (passwordError) {
+            return res.status(400).json({ error: passwordError });
+        }
+
+        // Check if user exists
         const existingUser = await prisma.user.findUnique({ where: { email } });
         if (existingUser) {
             return res.status(400).json({ error: "User already exists" });
@@ -30,17 +72,21 @@ const registerUser = async (req, res) => {
             },
         });
 
-        return res.status(200).send({
+        return res.status(201).send({
             success: true,
             message: "User created successfully",
-            data: newUser
+            data: {
+                id: newUser.id,
+                email: newUser.email,
+                name: newUser.name
+            }
         });
     }
     catch (err) {
-        return res.status(404).send({
+        return res.status(500).send({
             success: false,
-            message: 'internam server error',
-            error: err.message
+            message: 'Internal server error',
+            error: process.env.NODE_ENV === 'development' ? err.message : undefined
         });
     }
 }
@@ -72,8 +118,8 @@ const loginUser = async (req, res) => {
     } catch (error) {
         res.status(500).send({
             success: false,
-            message: 'internal error for login attempt',
-            message: error.message
+            message: 'Internal server error',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 };

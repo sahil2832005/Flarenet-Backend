@@ -2,6 +2,7 @@ const axios = require('axios');
 const { prisma } = require('../utils/prismaClient');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
+const { extractToken } = require('../middlewares/authMiddleware');
 
 const CLIENT_ID = process.env.GITHUB_CLIENT_ID;
 const CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET;
@@ -9,9 +10,18 @@ const REDIRECT_URI = process.env.GITHUB_REDIRECT_URI;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
 
 // 1. Redirect user to GitHub authentication
-function getGitHubAuthUrl() {
+// forceLogin: true = show GitHub login screen (for switching accounts)
+// forceLogin: false/undefined = use existing GitHub session (default, recommended)
+function getGitHubAuthUrl(forceLogin = false) {
     const scope = 'repo admin:repo_hook'; // Permissions for repo and webhook
-    return `https://github.com/login/oauth/authorize?client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}&scope=${scope}`;
+    let url = `https://github.com/login/oauth/authorize?client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}&scope=${scope}`;
+    
+    // Add login parameter to force account selection if requested
+    if (forceLogin) {
+        url += '&prompt=select_account';
+    }
+    
+    return url;
 }
 
 //exchange code for access token this will return access tolem required for all activities
@@ -87,10 +97,20 @@ async function saveAccessToken(userId, accessToken) {
 }
 
 //main working helpers
+// Query params:
+//   ?force=true  - Force GitHub login screen (switch accounts)
+//   (default)    - Use existing GitHub session
 async function githubRedirect(req, res) {
     try {
-        const authUrl = getGitHubAuthUrl();
-        res.json({ success: true, message: 'Redirect to GitHub for authentication', authUrl }); // Send auth URL in response
+        const forceLogin = req.query.force === 'true';
+        const authUrl = getGitHubAuthUrl(forceLogin);
+        res.json({ 
+            success: true, 
+            message: forceLogin 
+                ? 'Redirect to GitHub to select account' 
+                : 'Redirect to GitHub for authentication', 
+            authUrl 
+        });
     }
     catch (e) {
         res.status(500).send({
@@ -130,7 +150,17 @@ async function githubCallback(req, res) {
             { expiresIn: '7d' }
         );
 
-        res.redirect(`${FRONTEND_URL}/new/callback?token=${token}`);
+        // Set JWT as httpOnly cookie (secure - not accessible via JavaScript)
+        res.cookie('auth_token', token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production', // HTTPS only in production
+            sameSite: 'lax',
+            maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+            path: '/'
+        });
+
+        // Redirect without token in URL - frontend reads from cookie
+        res.redirect(`${FRONTEND_URL}/new/callback?auth=success`);
     } catch (error) {
         console.error('GitHub OAuth error:', error.message);
         res.redirect(`${FRONTEND_URL}/new/callback?error=${encodeURIComponent(error.message)}`);
@@ -171,13 +201,13 @@ async function fetchRepositoriesFromGitHub(accessToken) {
 
 
 async function getGitHubTokenFromJWT(req) {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    // Use shared extractToken to check both header AND cookie
+    const token = extractToken(req);
+    if (!token) {
         return null;
     }
 
     try {
-        const token = authHeader.slice(7);
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         
         const oauthToken = await prisma.oAuthToken.findUnique({
@@ -197,14 +227,14 @@ async function getGitHubTokenFromJWT(req) {
 
 async function getUserInfo(req, res) {
     try {
-        let accessToken = req.query?.accessToken || req.body?.accessToken;
+        // Only get token from encrypted DB storage via JWT (secure)
+        const accessToken = await getGitHubTokenFromJWT(req);
 
         if (!accessToken) {
-            accessToken = await getGitHubTokenFromJWT(req);
-        }
-
-        if (!accessToken) {
-            return res.status(401).json({ success: false, message: 'Missing access token or invalid authorization' });
+            return res.status(401).json({ 
+                success: false, 
+                message: 'GitHub account not linked or session expired' 
+            });
         }
 
         const userInfo = await getUserInfoHelper(accessToken);
@@ -212,22 +242,22 @@ async function getUserInfo(req, res) {
     } catch (err) {
         res.status(500).send({
             success: false,
-            message: 'error fetching user info',
-            error: err.message
+            message: 'Error fetching user info',
+            error: process.env.NODE_ENV === 'development' ? err.message : undefined
         });
     }
 }
 
 async function listRepositories(req, res) {
     try {
-        let accessToken = req.query?.accessToken || req.body?.accessToken;
+        // Only get token from encrypted DB storage via JWT (secure)
+        const accessToken = await getGitHubTokenFromJWT(req);
 
         if (!accessToken) {
-            accessToken = await getGitHubTokenFromJWT(req);
-        }
-
-        if (!accessToken) {
-            return res.status(401).json({ success: false, message: 'Missing access token or invalid authorization' });
+            return res.status(401).json({ 
+                success: false, 
+                message: 'GitHub account not linked or session expired' 
+            });
         }
 
         const repositories = await fetchRepositoriesFromGitHub(accessToken);
@@ -238,8 +268,8 @@ async function listRepositories(req, res) {
     catch (err) {
         res.status(500).send({
             success: false,
-            message: 'error fetching repositories',
-            error: err.message
+            message: 'Error fetching repositories',
+            error: process.env.NODE_ENV === 'development' ? err.message : undefined
         });
     }
 }
@@ -290,6 +320,46 @@ function decryptToken(encryptedData) {
     return decrypted;
 }
 
+/**
+ * Disconnect GitHub account - removes OAuth token from database
+ */
+async function disconnectGithub(req, res) {
+    try {
+        const userId = req.user?.userId;
+        
+        if (!userId) {
+            return res.status(401).json({
+                success: false,
+                message: 'User not authenticated'
+            });
+        }
+
+        // Delete the OAuth token for this user
+        const deleted = await prisma.oAuthToken.delete({
+            where: { userId }
+        }).catch(() => null); // Return null if not found
+
+        if (!deleted) {
+            return res.status(404).json({
+                success: false,
+                message: 'GitHub account not linked'
+            });
+        }
+
+        res.json({
+            success: true,
+            message: 'GitHub account disconnected successfully'
+        });
+    } catch (error) {
+        console.error('Error disconnecting GitHub:', error.message);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to disconnect GitHub account',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+}
+
 module.exports = {
     getGitHubAuthUrl,
     exchangeCodeForToken,
@@ -297,5 +367,6 @@ module.exports = {
     githubRedirect,
     githubCallback,
     getUserInfo,
-    listRepositories
+    listRepositories,
+    disconnectGithub
 };

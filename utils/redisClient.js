@@ -7,7 +7,14 @@ let redisEnabled = process.env.REDIS_ENABLED !== 'false'; // Default to enabled 
 let connectionAttempts = 0;
 const MAX_CONNECTION_ATTEMPTS = 5;
 
-console.log('Redis URL from env:', process.env.REDIS_URL ? 'YES (configured)' : 'NO (not set)');
+// Helper for dev-only logging
+const devLog = (...args) => {
+    if (process.env.NODE_ENV !== 'production') {
+        console.log(...args);
+    }
+};
+
+devLog('Redis URL:', process.env.REDIS_URL ? 'Configured' : 'Not set');
 
 /**
  * Initialize Redis client
@@ -16,25 +23,21 @@ console.log('Redis URL from env:', process.env.REDIS_URL ? 'YES (configured)' : 
 const initRedisClient = () => {
   try {
     if (!redisEnabled) {
-      console.log('Redis caching is explicitly disabled via environment variable');
+      devLog('Redis caching is explicitly disabled');
       return null;
     }
     
     connectionAttempts++;
-    console.log(`Redis connection attempt ${connectionAttempts}/${MAX_CONNECTION_ATTEMPTS}`);
+    devLog(`Redis connection attempt ${connectionAttempts}/${MAX_CONNECTION_ATTEMPTS}`);
     
-    // Log the Redis configuration for debugging
-    console.log('Redis configuration:');
-    console.log(`- Using URL: ${!!process.env.REDIS_URL}`);
-    console.log(`- Host: ${process.env.REDIS_HOST || 'localhost'}`);
-    console.log(`- Port: ${process.env.REDIS_PORT || '6379'}`);
-    console.log(`- TLS Enabled: ${process.env.REDIS_USE_TLS === 'true'}`);
-    console.log(`- Redis Enabled: ${redisEnabled}`);
+    // Log the Redis configuration for debugging (dev only, no sensitive data)
+    devLog('Redis configuration:');
+    devLog(`- Using URL: ${!!process.env.REDIS_URL}`);
+    devLog(`- TLS Enabled: ${process.env.REDIS_USE_TLS === 'true'}`);
     
     // Check if we have a Redis URL (preferred for cloud services)
     if (process.env.REDIS_URL && !process.env.REDIS_URL.includes('your-redis-host')) {
-      console.log('Connecting to Redis using connection URL from Redis Cloud');
-      console.log(`URL format: ${process.env.REDIS_URL.split('@')[0].replace(/:[^:]*@/, ':****@')}@[REDACTED]`);
+      devLog('Connecting to Redis using connection URL');
       
       // Configure connection options for Redis Cloud
       const connectionOptions = {
@@ -42,7 +45,7 @@ const initRedisClient = () => {
         enableReadyCheck: true,
         enableOfflineQueue: true,
         reconnectOnError: (err) => {
-          console.log(`Redis reconnect triggered due to error: ${err.message}`);
+          devLog(`Redis reconnect triggered: ${err.message}`);
           const targetError = 'READONLY';
           return err.message.includes(targetError) || err.message.includes('ETIMEDOUT');
         },
@@ -54,9 +57,9 @@ const initRedisClient = () => {
           
           const maxRetries = parseInt(process.env.REDIS_MAX_RETRIES || '10', 10);
           const delay = Math.min(times * 500, 10000); // Longer delays with higher ceiling
-          console.log(`Redis retry strategy: attempt ${times}/${maxRetries}, delaying ${delay}ms`);
+          devLog(`Redis retry: attempt ${times}/${maxRetries}`);
           if (times > maxRetries) {
-            console.log(`Redis connection failed after ${maxRetries} retries, will stop retrying`);
+            devLog(`Redis connection failed after ${maxRetries} retries`);
             return null; // Stop retrying after max attempts
           }
           return delay;
@@ -68,7 +71,7 @@ const initRedisClient = () => {
       
       // Add TLS options if TLS is enabled
       if (process.env.REDIS_USE_TLS === 'true') {
-        console.log('Configuring Redis with TLS options');
+        devLog('Redis TLS enabled');
         connectionOptions.tls = {
           rejectUnauthorized: false // Less strict for testing environments
         };
@@ -79,7 +82,7 @@ const initRedisClient = () => {
     
     // Fallback to individual connection parameters (use 'redis' for Docker, 'localhost' for local)
     const defaultHost = process.env.NODE_ENV === 'development' ? 'redis' : 'localhost';
-    console.log('WARNING: No valid Redis URL found, falling back to individual parameters');
+    devLog('Redis URL not found, using fallback config');
     const redisConfig = {
       host: process.env.REDIS_HOST || defaultHost,
       port: parseInt(process.env.REDIS_PORT || '6379', 10),
@@ -88,7 +91,7 @@ const initRedisClient = () => {
       enableReadyCheck: true,
       enableOfflineQueue: true,
       reconnectOnError: (err) => {
-        console.log(`Redis reconnect triggered due to error: ${err.message}`);
+        devLog(`Redis reconnect triggered: ${err.message}`);
         const targetError = 'READONLY';
         return err.message.includes(targetError) || err.message.includes('ETIMEDOUT');
       },
@@ -100,9 +103,9 @@ const initRedisClient = () => {
         
         const maxRetries = parseInt(process.env.REDIS_MAX_RETRIES || '10', 10);
         const delay = Math.min(times * 500, 10000); // Longer delays with higher ceiling
-        console.log(`Redis retry strategy: attempt ${times}/${maxRetries}, delaying ${delay}ms`);
+        devLog(`Redis retry: attempt ${times}/${maxRetries}`);
         if (times > maxRetries) {
-          console.log(`Redis connection failed after ${maxRetries} retries, will stop retrying`);
+          devLog(`Redis connection failed after ${maxRetries} retries`);
           return null; // Stop retrying after max attempts
         }
         return delay;
@@ -113,7 +116,7 @@ const initRedisClient = () => {
       tls: process.env.REDIS_USE_TLS === 'true' ? {} : undefined
     };
 
-    console.log('Creating new Redis client with configuration');
+    devLog('Creating Redis client');
     const client = new Redis(redisConfig);
     
     // Handle connection events
@@ -121,28 +124,28 @@ const initRedisClient = () => {
       console.error('Redis connection error:', error);
       // Don't disable Redis on every error, just log it
       if (error.code === 'ECONNREFUSED') {
-        console.log('Connection to Redis refused. Check if Redis server is running.');
+        devLog('Redis connection refused');
         // Only disable if we've exceeded max connection attempts
         if (connectionAttempts >= MAX_CONNECTION_ATTEMPTS) {
-          console.log(`Max connection attempts (${MAX_CONNECTION_ATTEMPTS}) reached, disabling Redis`);
+          devLog(`Max connection attempts reached, disabling Redis`);
           redisEnabled = false;
         }
       } else if (error.code === 'ETIMEDOUT') {
-        console.log('Connection to Redis timed out. Check network connectivity to Redis server.');
+        devLog('Redis connection timed out');
         // Don't disable Redis on timeout, retry might succeed
-        console.log(`Connection attempt ${connectionAttempts}/${MAX_CONNECTION_ATTEMPTS}`);
+        devLog(`Connection attempt ${connectionAttempts}/${MAX_CONNECTION_ATTEMPTS}`);
       } else {
-        console.log(`Redis error: ${error.message}`);
+        devLog(`Redis error: ${error.message}`);
       }
     });
     
     client.on('connect', () => {
-      console.log('Connected to Redis server');
+      devLog('Redis connected');
       redisEnabled = true;
     });
     
     client.on('ready', () => {
-      console.log('Redis Client Ready');
+      devLog('Redis ready');
       redisEnabled = true;
       // Reset connection attempts on successful connection
       connectionAttempts = 0;
@@ -151,16 +154,16 @@ const initRedisClient = () => {
     });
     
     client.on('reconnecting', (delay) => {
-      console.log(`Redis reconnecting in ${delay}ms...`);
+      devLog(`Redis reconnecting...`);
     });
     
     client.on('end', () => {
-      console.log('Redis connection ended');
+      devLog('Redis connection ended');
     });
     
     // Handle close events
     client.on('close', () => {
-      console.log('Redis connection closed');
+      devLog('Redis connection closed');
     });
     
     return client;
@@ -181,9 +184,9 @@ const getRedisClient = () => {
     
     // Log whether we got a client
     if (redisClient) {
-      console.log('Redis Client Initialized');
+      devLog('Redis Client Initialized');
     } else {
-      console.log('Redis Client Initialization Failed');
+      devLog('Redis Client Initialization Failed');
     }
   }
   return redisClient;

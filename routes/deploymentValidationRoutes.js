@@ -1,27 +1,28 @@
 const express = require('express');
 const router = express.Router();
 const { validateReactProject, validateReactProjectByUrl } = require('../auth/deploymentAuth');
+const { verifyToken } = require('../middlewares/authMiddleware');
 
 /**
  * @route GET /api/validate/react
  * @desc Validate if a GitHub repository is a React project (using owner/repo)
- * @access Private (requires GitHub token)
+ * @access Private (requires JWT authentication)
  */
-router.get('/react', validateReactProject);
+router.get('/react', verifyToken, validateReactProject);
 
 /**
  * @route GET /api/validate/react-by-url
  * @desc Validate if a GitHub repository is a React project (using URL)
- * @access Private (requires GitHub token)
+ * @access Private (requires JWT authentication)
  */
-router.get('/react-by-url', validateReactProjectByUrl);
+router.get('/react-by-url', verifyToken, validateReactProjectByUrl);
 
 /**
  * @route POST /api/check-react-repo
  * @desc Validate if a GitHub repository is a React project (using URL in request body)
- * @access Private (requires GitHub token)
+ * @access Private (requires JWT authentication)
  */
-router.post('/check-react-repo', async (req, res) => {
+router.post('/check-react-repo', verifyToken, async (req, res) => {
     try {
         const { url } = req.body;
         

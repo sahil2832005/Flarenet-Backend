@@ -1,9 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const clickHouseClient = require('../utils/clickHouseClient');
+const { verifyToken } = require('../middlewares/authMiddleware');
 
-// Get AI analysis for a specific deployment
-router.get('/:deploymentId', async (req, res) => {
+// Get AI analysis for a specific deployment (protected route)
+router.get('/:deploymentId', verifyToken, async (req, res) => {
     try {
         const { deploymentId } = req.params;
         const { from, to, limit = 100 } = req.query;
@@ -48,7 +49,7 @@ router.get('/:deploymentId', async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Failed to fetch AI analysis',
-            error: error.message
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
         });
     }
 });

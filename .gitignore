@@ -85,3 +85,11 @@ appendonly.aof
 
 # ClickHouse data
 /clickhouse-data/
+
+# Excluded from tracking
+cookies.txt
+flarnet/
+medium
+standard
+test-compute.js
+webapp
