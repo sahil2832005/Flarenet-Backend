@@ -29,8 +29,11 @@ model Profile {
 model Project {
   id           String               @id @default(uuid()) @db.Uuid
   name         String
-  gitUrl       String
+  gitUrl       String               @unique
   description  String?
+  gitOwner     String?
+  gitRepo      String?
+  gitBranch    String?
   ownerId      Int
   createdAt    DateTime             @default(now())
   updatedAt    DateTime             @updatedAt
@@ -137,10 +140,10 @@ model ProjectArchitecture {
 
   // Phase 1: New enterprise fields
   resourceTier      String?         // starter, standard, performance, dedicated
-  compliance        Json?           // ["none"] or ["soc2", "hipaa", "gdpr", "pci", "iso27001"]
+  compliance        Json?           // deprecated — removed from arch chat flow
   teamSize          String?         // solo, small, medium, large
   availability      String?         // standard, high, critical
-  networkIsolation  String?         // shared, dedicated_vlan, private
+  networkIsolation  String?         // deprecated — removed from arch chat flow
   managedLevel      String?         // templates_only, semi_managed, full_managed
 
   // Current step for resume capability

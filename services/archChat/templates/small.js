@@ -1,16 +1,8 @@
-/**
- * Small Scale Architecture Template
- * For: < 1,000 users, MVPs, prototypes
- * Self-hosted with: Nginx, Redis, MongoDB/PostgreSQL, Docker, Server
- * Phase 2: Now uses resource_tier, availability, compliance inputs
- */
-
 const { RESOURCE_TIERS, AVAILABILITY_CONFIG } = require('../resourceCalculator');
 
 function getSmallArchitecture(config) {
     const { app_type, database, features, traffic, budget, resource_tier, availability, team_size } = config;
-    
-    // Phase 2: Get actual resource tier specs
+
     const tierSpecs = RESOURCE_TIERS[resource_tier] || RESOURCE_TIERS.starter;
     const availConfig = AVAILABILITY_CONFIG[availability] || AVAILABILITY_CONFIG.standard;
 
@@ -18,14 +10,11 @@ function getSmallArchitecture(config) {
         name: team_size === 'solo' ? 'Simple Monolith (Solo-friendly)' : 'Simple Monolith',
         tier: 'small',
         resourceTier: resource_tier,
-        
-        // NOTE: compute section removed - tier specs shown in Resources tab
 
         backend: {
             framework: app_type === 'realtime' ? 'Node.js + Socket.io' : 'Node.js + Express',
             structure: 'Monolithic',
             api: 'REST API',
-            // Phase 2: Replicas based on availability
             replicas: Math.min(availConfig.appReplicas, tierSpecs.maxReplicas),
             notes: team_size === 'solo' 
                 ? 'Single codebase, minimal ops overhead - perfect for small teams'
@@ -45,10 +34,7 @@ function getSmallArchitecture(config) {
                     setup: availConfig.dbReplicas > 0 ? 'Primary + read replica' : 'Single instance with data volume'
                   },
             orm: database === 'document' ? 'Mongoose' : 'Prisma',
-            // Phase 2: Backup retention based on compliance
-            backup: config.compliance.includes('hipaa') 
-                ? 'Daily backup with 6-year retention (HIPAA)'
-                : 'Daily pg_dump/mongodump to backup location',
+            backup: 'Daily pg_dump/mongodump to backup location',
             replicas: availConfig.dbReplicas
         },
 
@@ -56,7 +42,6 @@ function getSmallArchitecture(config) {
             type: 'Redis',
             recommendation: 'Redis in Docker container',
             use: 'Session storage, API caching',
-            // Phase 2: Size based on tier
             sizing: tierSpecs.memory <= 4096 ? '256MB' : '512MB'
         } : null,
 
@@ -85,10 +70,7 @@ function getSmallArchitecture(config) {
             type: 'JWT + bcrypt',
             recommendation: 'Custom implementation',
             sessions: 'Redis-backed sessions',
-            // Phase 2: MFA based on compliance
-            mfa: config.compliance.includes('hipaa') || config.compliance.includes('pci') 
-                ? 'Required' 
-                : 'Optional'
+            mfa: 'Optional'
         } : null,
 
         realtime: features.includes('websocket') || app_type === 'realtime' ? {
@@ -97,7 +79,6 @@ function getSmallArchitecture(config) {
             scaling: availConfig.appReplicas > 1 ? 'Redis adapter for multi-instance' : 'Single server - no adapter needed'
         } : null,
 
-        // Phase 2: Availability configuration
         availability: {
             level: availability,
             sla: availability === 'standard' ? '99%' : availability === 'high' ? '99.9%' : '99.99%',
@@ -136,7 +117,6 @@ function getSmallArchitecture(config) {
             uptime: 'curl-based health endpoint monitoring'
         },
 
-        // Phase 2: Cost based on resource tier
         estimatedCost: getEstimatedCost(resource_tier, config.managed_level),
 
         serverRequirements: {
@@ -152,10 +132,6 @@ function getSmallArchitecture(config) {
     return architecture;
 }
 
-/**
- * Phase 2: Calculate estimated cost based on tier and managed level
- * Only Starter and Standard tiers available
- */
 function getEstimatedCost(resourceTier, managedLevel) {
     const tierCosts = {
         starter: { min: 20, max: 50 },      // Starter Plan

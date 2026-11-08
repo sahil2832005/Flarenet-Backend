@@ -1,5 +1,5 @@
 const axios = require('axios');
-const { prisma } = require('../utils/prismaClient');
+const { prisma } = require('../clients/prismaClient');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const { extractToken } = require('../middlewares/authMiddleware');
@@ -7,12 +7,27 @@ const { extractToken } = require('../middlewares/authMiddleware');
 const CLIENT_ID = process.env.GITHUB_CLIENT_ID;
 const CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET;
 const REDIRECT_URI = process.env.GITHUB_REDIRECT_URI;
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+
+function assertGitHubOAuthConfigured() {
+    const missing = [];
+    if (!CLIENT_ID) missing.push('GITHUB_CLIENT_ID');
+    if (!CLIENT_SECRET) missing.push('GITHUB_CLIENT_SECRET');
+    if (!REDIRECT_URI) missing.push('GITHUB_REDIRECT_URI');
+    if (missing.length > 0) {
+        const err = new Error(
+            `GitHub OAuth is not configured. Set ${missing.join(', ')} in .env and recreate the backend container.`
+        );
+        err.code = 'GITHUB_OAUTH_NOT_CONFIGURED';
+        throw err;
+    }
+}
 
 // 1. Redirect user to GitHub authentication
 // forceLogin: true = show GitHub login screen (for switching accounts)
 // forceLogin: false/undefined = use existing GitHub session (default, recommended)
 function getGitHubAuthUrl(forceLogin = false) {
+    assertGitHubOAuthConfigured();
     const scope = 'repo admin:repo_hook'; // Permissions for repo and webhook
     let url = `https://github.com/login/oauth/authorize?client_id=${CLIENT_ID}&redirect_uri=${REDIRECT_URI}&scope=${scope}`;
     
@@ -113,9 +128,11 @@ async function githubRedirect(req, res) {
         });
     }
     catch (e) {
-        res.status(500).send({
+        const status = e.code === 'GITHUB_OAUTH_NOT_CONFIGURED' ? 503 : 500;
+        res.status(status).json({
             success: false,
-            message: 'error generating github redirect url'
+            code: e.code || 'GITHUB_AUTH_URL_ERROR',
+            message: e.message || 'error generating github redirect url'
         });
     }
 }

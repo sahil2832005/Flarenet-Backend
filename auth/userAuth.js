@@ -1,5 +1,5 @@
 const bcrypt = require('bcrypt');
-const { prisma } = require('../utils/prismaClient');
+const { prisma } = require('../clients/prismaClient');
 const jwt = require('jsonwebtoken');
 require('dotenv').config({ path: '../.env' });
 

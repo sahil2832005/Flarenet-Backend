@@ -1,19 +1,8 @@
-/**
- * Large Scale Architecture Template
- * For: 100,000+ users, enterprise scale
- * Self-hosted with: Nginx, Redis, MongoDB/PostgreSQL, Docker, Server
- * Phase 2: Now uses resource_tier, availability, compliance inputs
- * 
- * NOTE: Only Starter and Standard tiers available.
- * Large scale should use Standard tier with appropriate warnings.
- */
-
 const { RESOURCE_TIERS, AVAILABILITY_CONFIG } = require('../resourceCalculator');
 
 function getLargeArchitecture(config) {
-    const { app_type, database, features, traffic, resource_tier, availability, team_size, compliance } = config;
-    
-    // Phase 2: Get actual resource tier specs (fallback to standard)
+    const { app_type, database, features, traffic, resource_tier, availability, team_size } = config;
+
     const tierSpecs = RESOURCE_TIERS[resource_tier] || RESOURCE_TIERS.standard;
     const availConfig = AVAILABILITY_CONFIG[availability] || AVAILABILITY_CONFIG.high;
 
@@ -21,13 +10,10 @@ function getLargeArchitecture(config) {
         name: team_size === 'large' ? 'Enterprise Microservices Platform' : 'Distributed Microservices',
         tier: 'large',
         resourceTier: resource_tier,
-        
-        // NOTE: compute section removed - tier specs shown in Resources tab
 
         backend: {
             framework: 'Node.js microservices',
             structure: 'Microservices Architecture',
-            // Phase 2: Replicas based on availability
             replicas: Math.min(availConfig.appReplicas, tierSpecs.maxReplicas),
             services: [
                 'API Gateway (Node.js)',
@@ -60,12 +46,6 @@ function getLargeArchitecture(config) {
                     replicas: availConfig.dbReplicas
                   },
             perService: 'Dedicated database per service if needed',
-            // Phase 2: Backup based on compliance
-            backup: compliance.includes('hipaa')
-                ? 'Continuous backup with 6-year retention, encrypted (HIPAA)'
-                : compliance.includes('pci')
-                    ? 'Point-in-time recovery, encrypted, quarterly testing (PCI)'
-                    : 'Continuous backup with point-in-time recovery',
             backup: 'Continuous backup with point-in-time recovery',
             connectionPooling: database === 'document' ? 'Mongoose pooling' : 'PgBouncer cluster'
         },
@@ -115,20 +95,9 @@ function getLargeArchitecture(config) {
                 'Refresh token rotation',
                 'Rate limiting per user',
                 'Account lockout',
-                // Phase 2: MFA based on compliance
-                compliance.includes('hipaa') || compliance.includes('pci') ? 'MFA required' : 'MFA optional'
+                'MFA optional'
             ],
-            sessions: 'Redis Cluster backed',
-            // Phase 2: Compliance-specific auth requirements
-            compliance: compliance.includes('hipaa') ? {
-                sessionTimeout: '15 minutes',
-                autoLogout: true,
-                accessLogging: 'All PHI access logged'
-            } : compliance.includes('pci') ? {
-                sessionTimeout: '15 minutes',
-                uniqueIds: 'Required per user',
-                accessReview: 'Quarterly'  
-            } : null
+            sessions: 'Redis Cluster backed'
         },
 
         realtime: features.includes('websocket') || app_type === 'realtime' ? {
@@ -139,7 +108,6 @@ function getLargeArchitecture(config) {
             notes: 'Design for 100k+ concurrent connections'
         } : null,
 
-        // Phase 2: Availability configuration
         availability: {
             level: availability,
             sla: availability === 'standard' ? '99%' : availability === 'high' ? '99.9%' : '99.99%',
@@ -211,12 +179,9 @@ function getLargeArchitecture(config) {
             database: `${1 + availConfig.dbReplicas} node replica set with automatic failover`,
             cache: availConfig.redisReplicas > 0 ? 'Redis Cluster with automatic failover' : 'Redis with persistence',
             loadBalancer: availability === 'critical' ? 'Multiple Nginx instances (active-active)' : 'Multiple Nginx instances',
-            backup: compliance.includes('hipaa') 
-                ? 'Encrypted automated backups with offsite storage (6-year retention)'
-                : 'Regular automated backups with offsite storage'
+            backup: 'Regular automated backups with offsite storage'
         },
 
-        // Phase 2: Cost based on resource tier
         estimatedCost: getLargeEstimatedCost(resource_tier, config.managed_level),
 
         serverRequirements: {
@@ -238,11 +203,6 @@ function getLargeArchitecture(config) {
     return architecture;
 }
 
-/**
- * Phase 2: Calculate estimated cost based on tier and managed level
- * Only Starter and Standard tiers available
- * Large scale with Standard tier may need multiple server instances
- */
 function getLargeEstimatedCost(resourceTier, managedLevel) {
     const tierCosts = {
         starter: { min: 100, max: 200 },     // Not recommended for large scale

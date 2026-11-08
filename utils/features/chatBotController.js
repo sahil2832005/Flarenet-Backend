@@ -1,7 +1,7 @@
-const { prisma } = require("../prismaClient");
+const { prisma } = require("../../clients/prismaClient");
 const buildQueue = require("../../queues/buildQueue");
 const { llm, memory } = require("../../utils/langchainConfig");
-const { getRedisClient } = require("../redisClient");
+const { getRedisClient } = require("../../clients/redisClient");
 
 // Use shared Redis client
 const redis = getRedisClient();

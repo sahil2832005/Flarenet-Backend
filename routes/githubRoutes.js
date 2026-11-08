@@ -6,7 +6,7 @@ const { validateWebhookMiddleware } = require('../auth/validatewebhook');
 const { githubRedirect,
     exchangeCodeForToken,
     saveAccessToken,githubCallback,getUserInfo,listRepositories,disconnectGithub } = require('../auth/githubAuth');
-const {handlePushEvent}=require('../auth/webEventHandelers');
+const { handlePushEvent } = require('../auth/webEventHandlers');
 // const { App } = require('octokit');
 
 const router = express.Router();

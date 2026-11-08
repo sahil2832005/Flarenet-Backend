@@ -1,4 +1,4 @@
-const { prisma } = require('../utils/prismaClient');
+const { prisma } = require('../clients/prismaClient');
 const { runWorkflow } = require('../workflows/workFlowEngine');
 
 async function handlePushEvent(event) {

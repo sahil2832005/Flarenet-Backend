@@ -1,11 +1,11 @@
 const { Worker } = require('bullmq');
 const { RunTaskCommand } = require('@aws-sdk/client-ecs');
-const { client } = require('../utils/awsClient');
-const { prisma } = require('../utils/prismaClient');
+const { client } = require('../clients/awsClient');
+const { prisma } = require('../clients/prismaClient');
 const failedQueue = require('../queues/failedQueue');
 const { llm, memory } = require("../utils/langchainConfig"); // Import LLM instance
-const kafka = require('../utils/kafkaClient');
-const clickHouseClient = require('../utils/clickHouseClient');
+const kafka = require('../clients/kafkaClient');
+const clickHouseClient = require('../clients/clickHouseClient');
 // UUID will be dynamically imported
 require('dotenv').config({ path: '../.env' });
 const axios = require('axios');

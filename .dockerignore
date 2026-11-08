@@ -4,10 +4,12 @@ npm-debug.log
 .env.*
 .git
 .gitignore
+.gitattributes
 .dockerignore
 Dockerfile
 README.md
 .vscode
+.cursor
 coverage
 dist
 build
@@ -17,3 +19,7 @@ __tests__
 .next
 .nuxt
 .cache
+scripts
+compose
+yarn.lock
+.env.example

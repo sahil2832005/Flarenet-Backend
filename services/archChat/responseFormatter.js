@@ -1,11 +1,5 @@
 /**
- * Response Formatter
- * Converts architecture data into UI-friendly format
- * Phase 2: Added resource allocation, compliance, availability sections
- */
-
-/**
- * Format full architecture for detailed view
+ * Format a detailed architecture response for the UI.
  */
 function formatFullResponse(architecture) {
     return {
@@ -15,18 +9,16 @@ function formatFullResponse(architecture) {
             resourceTier: architecture.resourceTier,
             description: getTierDescription(architecture.tier)
         },
-        
+
         diagram: generateTextDiagram(architecture),
-        
-        // Phase 2: Resource allocation section
+
         resourceAllocation: architecture.resourceAllocation ? {
             title: 'Resource Allocation',
             tier: architecture.resourceAllocation.tier,
             containers: architecture.resourceAllocation.containers,
             summary: architecture.resourceAllocation.summary
         } : null,
-        
-        // Phase 2: Availability section
+
         availability: architecture.availabilityConfig ? {
             title: 'High Availability',
             level: architecture.availabilityConfig.level,
@@ -38,26 +30,9 @@ function formatFullResponse(architecture) {
             healthCheck: architecture.availabilityConfig.healthCheck,
             failover: architecture.availabilityConfig.failover
         } : null,
-        
-        // Phase 2: Compliance section  
-        compliance: architecture.compliance?.enabled ? {
-            title: 'Compliance Configuration',
-            standards: architecture.compliance.standards,
-            requirements: architecture.compliance.requirements,
-            checklist: architecture.compliance.checklist
-        } : null,
-        
-        // Phase 2: Network section
-        network: architecture.networkConfig ? {
-            title: 'Network Configuration',
-            type: architecture.networkConfig.type,
-            isolation: architecture.networkConfig.isolation,
-            publicAccess: architecture.networkConfig.publicAccess,
-            firewall: architecture.networkConfig.firewall
-        } : null,
-        
+
         components: formatComponents(architecture),
-        
+
         deployment: architecture.deployment ? {
             title: 'Deployment',
             platform: architecture.deployment.platform,
@@ -73,7 +48,6 @@ function formatFullResponse(architecture) {
             notes: architecture.estimatedCost.notes
         } : null,
 
-        // Phase 2: Enhanced warnings with severity
         warnings: (architecture.warnings || []).map(w => ({
             type: w.type,
             severity: w.severity || 'warning',
@@ -88,6 +62,8 @@ function formatFullResponse(architecture) {
 
         nextSteps: generateNextSteps(architecture),
 
+        starterPlan: architecture.starterPlan || null,
+
         metadata: {
             generatedAt: architecture.generatedAt,
             basedOn: architecture.inputConfig
@@ -95,24 +71,18 @@ function formatFullResponse(architecture) {
     };
 }
 
-/**
- * Format for chat message (shorter)
- * Phase 2: Added resource allocation, availability, compliance
- */
 function formatChatResponse(architecture) {
     const summary = [];
-    
+
     summary.push(`### ${architecture.name}`);
     summary.push(`*${getTierDescription(architecture.tier)}*\n`);
-    
-    // Phase 2: Resource tier info
+
     if (architecture.resourceTier) {
         summary.push(`**Resource Tier:** ${architecture.resourceTier.charAt(0).toUpperCase() + architecture.resourceTier.slice(1)}`);
     }
-    
+
     summary.push('\n**Tech Stack:**');
-    
-    // NOTE: compute removed - shown in Resources tab
+
     if (architecture.backend) {
         const replicas = architecture.backend.replicas ? ` × ${architecture.backend.replicas} replicas` : '';
         summary.push(`- **Backend:** ${architecture.backend.framework} - ${architecture.backend.structure}${replicas}`);
@@ -127,28 +97,20 @@ function formatChatResponse(architecture) {
     if (architecture.queue) {
         summary.push(`- **Queue:** ${architecture.queue.type}`);
     }
-    
-    // Phase 2: Availability info
+
     if (architecture.availability || architecture.availabilityConfig) {
         const avail = architecture.availability || architecture.availabilityConfig;
         summary.push(`\n**Availability:** ${avail.sla || avail.level} SLA`);
     }
-    
-    // Phase 2: Compliance info
-    if (architecture.compliance?.enabled && architecture.compliance.standards?.length > 0) {
-        const standards = architecture.compliance.standards.map(s => s.name).join(', ');
-        summary.push(`**Compliance:** ${standards}`);
-    }
-    
+
     summary.push(`\n**Estimated Cost:** ${architecture.estimatedCost?.range || 'Variable'}`);
 
-    // Phase 2: Enhanced warnings with severity
     if (architecture.warnings?.length > 0) {
         const criticalWarnings = architecture.warnings.filter(w => w.severity === 'critical');
         const otherWarnings = architecture.warnings.filter(w => w.severity !== 'critical');
-        
+
         if (criticalWarnings.length > 0) {
-            summary.push('\n**⚠️ Critical Issues:**');
+            summary.push('\n**Critical Issues:**');
             criticalWarnings.forEach(w => {
                 summary.push(`- ${w.message}`);
                 if (w.recommendation) {
@@ -156,7 +118,7 @@ function formatChatResponse(architecture) {
                 }
             });
         }
-        
+
         if (otherWarnings.length > 0) {
             summary.push('\n**Considerations:**');
             otherWarnings.forEach(w => {
@@ -168,11 +130,56 @@ function formatChatResponse(architecture) {
     return summary.join('\n');
 }
 
-/**
- * Format components for UI cards
- * NOTE: Compute component removed - tier info is shown in Resources tab
- * Only actual service containers are shown here
- */
+function resolveDiagramMeta(componentId, serviceType = '') {
+    const t = String(serviceType || '').toLowerCase();
+
+    const byId = {
+        nginx: { diagramType: 'nginx', diagramLabel: 'NGINX', diagramColor: '#009639' },
+        backend: { diagramType: 'server', diagramLabel: 'Node.js App', diagramColor: '#3b82f6' },
+        cache: { diagramType: 'redis', diagramLabel: 'Redis', diagramColor: '#dc382d' },
+        queue: {
+            diagramType: t.includes('kafka') ? 'kafka' : 'queue',
+            diagramLabel: t.includes('kafka') ? 'Kafka' : 'Queue',
+            diagramColor: t.includes('kafka') ? '#ffffff' : '#ec4899'
+        },
+        storage: { diagramType: 'storage', diagramLabel: 'File Storage', diagramColor: '#f97316' },
+        auth: { diagramType: 'service', diagramLabel: 'Authentication', diagramColor: '#8b5cf6' },
+        realtime: { diagramType: 'service', diagramLabel: 'Socket.io', diagramColor: '#8b5cf6' },
+        monitoring: { diagramType: 'service', diagramLabel: 'Monitoring', diagramColor: '#64748b' }
+    };
+
+    if (componentId === 'database') {
+        if (t.includes('mongo')) {
+            return { diagramType: 'mongodb', diagramLabel: 'MongoDB', diagramColor: '#47a248' };
+        }
+        if (t.includes('postgres') || t.includes('sql')) {
+            return { diagramType: 'postgresql', diagramLabel: 'PostgreSQL', diagramColor: '#336791' };
+        }
+        return { diagramType: 'database', diagramLabel: 'Database', diagramColor: '#10b981' };
+    }
+
+    if (componentId === 'search') {
+        if (t.includes('elastic')) {
+            return { diagramType: 'elasticsearch', diagramLabel: 'Elasticsearch', diagramColor: '#fed10a' };
+        }
+        if (t.includes('mongo')) {
+            return { diagramType: 'mongodb', diagramLabel: 'MongoDB Search', diagramColor: '#47a248' };
+        }
+        return { diagramType: 'postgresql', diagramLabel: 'PostgreSQL FTS', diagramColor: '#336791' };
+    }
+
+    return byId[componentId] || {
+        diagramType: 'service',
+        diagramLabel: serviceType || componentId,
+        diagramColor: '#94a3b8'
+    };
+}
+
+function withDiagramMeta(component) {
+    const meta = resolveDiagramMeta(component.id, component.type);
+    return { ...component, ...meta };
+}
+
 function formatComponents(architecture) {
     const components = [];
 
@@ -296,7 +303,7 @@ function formatComponents(architecture) {
         });
     }
 
-    return components;
+    return components.map(withDiagramMeta);
 }
 
 /**

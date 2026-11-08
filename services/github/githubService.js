@@ -1,6 +1,6 @@
 // Using dynamic import for ESM module
 let Octokit;
-const { getRedisClient, isRedisAvailable } = require('../../utils/redisClient');
+const { getRedisClient, isRedisAvailable } = require('../../clients/redisClient');
 
 class GitHubService {
   /**
