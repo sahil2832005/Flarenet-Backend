@@ -3,26 +3,57 @@
  * Uses PostgreSQL via Prisma - linked to Project
  */
 
-const { prisma } = require('../../utils/prismaClient');
+const { prisma } = require('../../clients/prismaClient');
+
+/**
+ * Load a project and require the caller to own it.
+ * Returns { project } or { error, code }.
+ */
+async function requireProjectOwner(projectId, userId) {
+    if (userId === null || userId === undefined || userId === '') {
+        return {
+            error: 'You do not own this project',
+            code: 'UNAUTHORIZED'
+        };
+    }
+
+    const project = await prisma.project.findUnique({
+        where: { id: projectId }
+    });
+
+    if (!project) {
+        return {
+            error: 'Project not found',
+            code: 'PROJECT_NOT_FOUND'
+        };
+    }
+
+    if (project.ownerId !== Number(userId)) {
+        return {
+            error: 'You do not own this project',
+            code: 'UNAUTHORIZED'
+        };
+    }
+
+    return { project };
+}
 
 /**
  * Create or reset architecture session for a project
  * Called when user starts the questionnaire
  */
 async function createSession(projectId, userId = null) {
-    // Validate project exists and user owns it
+    const access = await requireProjectOwner(projectId, userId);
+    if (access.error) {
+        const error = new Error(access.error);
+        error.code = access.code;
+        throw error;
+    }
+
     const project = await prisma.project.findUnique({
         where: { id: projectId },
         include: { architecture: true }
     });
-
-    if (!project) {
-        throw new Error('Project not found');
-    }
-
-    if (userId && project.ownerId !== userId) {
-        throw new Error('Unauthorized: You do not own this project');
-    }
 
     // If architecture record exists, reset it for re-run
     if (project.architecture) {
@@ -36,12 +67,9 @@ async function createSession(projectId, userId = null) {
                 features: null,
                 traffic: null,
                 budget: null,
-                // Phase 1: New fields
                 resourceTier: null,
-                compliance: null,
                 teamSize: null,
                 availability: null,
-                networkIsolation: null,
                 managedLevel: null,
                 // Reset state
                 currentStep: 'app_type',
@@ -101,12 +129,9 @@ async function updateSession(projectId, updates) {
         updateData.features = null;
         updateData.traffic = null;
         updateData.budget = null;
-        // Phase 1: New fields
         updateData.resourceTier = null;
-        updateData.compliance = null;
         updateData.teamSize = null;
         updateData.availability = null;
-        updateData.networkIsolation = null;
         updateData.managedLevel = null;
         // Reset state
         updateData.status = 'IN_PROGRESS';
@@ -122,12 +147,9 @@ async function updateSession(projectId, updates) {
         if (answers.features !== undefined) updateData.features = answers.features;
         if (answers.traffic !== undefined) updateData.traffic = answers.traffic;
         if (answers.budget !== undefined) updateData.budget = answers.budget;
-        // Phase 1: New fields
         if (answers.resource_tier !== undefined) updateData.resourceTier = answers.resource_tier;
-        if (answers.compliance !== undefined) updateData.compliance = answers.compliance;
         if (answers.team_size !== undefined) updateData.teamSize = answers.team_size;
         if (answers.availability !== undefined) updateData.availability = answers.availability;
-        if (answers.network_isolation !== undefined) updateData.networkIsolation = answers.network_isolation;
         if (answers.managed_level !== undefined) updateData.managedLevel = answers.managed_level;
     }
 
@@ -190,12 +212,9 @@ function mapToSession(arch) {
     if (arch.features) answers.features = arch.features;
     if (arch.traffic) answers.traffic = arch.traffic;
     if (arch.budget) answers.budget = arch.budget;
-    // Phase 1: New fields
     if (arch.resourceTier) answers.resource_tier = arch.resourceTier;
-    if (arch.compliance) answers.compliance = arch.compliance;
     if (arch.teamSize) answers.team_size = arch.teamSize;
     if (arch.availability) answers.availability = arch.availability;
-    if (arch.networkIsolation) answers.network_isolation = arch.networkIsolation;
     if (arch.managedLevel) answers.managed_level = arch.managedLevel;
 
     return {
@@ -212,6 +231,7 @@ function mapToSession(arch) {
 }
 
 module.exports = {
+    requireProjectOwner,
     createSession,
     getSession,
     updateSession,

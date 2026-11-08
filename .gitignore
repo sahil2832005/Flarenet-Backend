@@ -1,6 +1,7 @@
 # Dependency directories
 node_modules/
 jspm_packages/
+yarn.lock
 
 # Environment variables
 .env
@@ -9,7 +10,6 @@ jspm_packages/
 .env.test
 .env.production
 .env*.local
-.env.redis-cloud
 
 # Logs
 logs
@@ -88,8 +88,5 @@ appendonly.aof
 
 # Excluded from tracking
 cookies.txt
-flarnet/
-medium
-standard
-test-compute.js
-webapp
+
+.cursor/

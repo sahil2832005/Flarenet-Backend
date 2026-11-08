@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const clickHouseClient = require('../utils/clickHouseClient');
+const clickHouseClient = require('../clients/clickHouseClient');
 const { verifyToken } = require('../middlewares/authMiddleware');
 
 // Get AI analysis for a specific deployment (protected route)

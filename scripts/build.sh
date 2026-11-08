@@ -51,7 +51,7 @@ log_header() {
 
 check_docker() {
     if ! command -v docker &> /dev/null; then
-        log_error "Docker is not installed"
+        log_error "Docker not found on PATH. Start Docker Desktop and restart your terminal."
         exit 1
     fi
     if ! docker info &> /dev/null; then

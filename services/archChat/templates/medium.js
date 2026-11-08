@@ -1,16 +1,8 @@
-/**
- * Medium Scale Architecture Template
- * For: 1,000 - 100,000 users, growing startups
- * Self-hosted with: Nginx, Redis, MongoDB/PostgreSQL, Docker, Server
- * Phase 2: Now uses resource_tier, availability, compliance inputs
- */
-
 const { RESOURCE_TIERS, AVAILABILITY_CONFIG } = require('../resourceCalculator');
 
 function getMediumArchitecture(config) {
-    const { app_type, database, features, traffic, budget, resource_tier, availability, team_size, compliance } = config;
-    
-    // Phase 2: Get actual resource tier specs
+    const { app_type, database, features, traffic, budget, resource_tier, availability, team_size } = config;
+
     const tierSpecs = RESOURCE_TIERS[resource_tier] || RESOURCE_TIERS.standard;
     const availConfig = AVAILABILITY_CONFIG[availability] || AVAILABILITY_CONFIG.standard;
 
@@ -18,8 +10,6 @@ function getMediumArchitecture(config) {
         name: traffic === 'spiky' ? 'Scalable Monolith with Auto-Scaling' : 'Modular Monolith',
         tier: 'medium',
         resourceTier: resource_tier,
-        
-        // NOTE: compute section removed - tier specs shown in Resources tab
 
         backend: {
             framework: app_type === 'realtime' 
@@ -29,7 +19,6 @@ function getMediumArchitecture(config) {
                 ? 'Service-oriented (2-3 services)'
                 : 'Modular Monolith',
             api: 'REST API with OpenAPI spec',
-            // Phase 2: Replicas based on availability
             replicas: Math.min(availConfig.appReplicas, tierSpecs.maxReplicas),
             notes: team_size === 'small' 
                 ? 'Modular structure allows easy team scaling'
@@ -53,12 +42,7 @@ function getMediumArchitecture(config) {
                         : 'Primary with point-in-time recovery'
                   },
             orm: database === 'document' ? 'Mongoose' : 'Prisma',
-            // Phase 2: Backup retention based on compliance
-            backup: compliance.includes('hipaa')
-                ? 'Encrypted daily backups, 6-year retention (HIPAA)'
-                : compliance.includes('soc2')
-                    ? 'Automated daily backups, 1-year retention (SOC2)'
-                    : 'Automated daily backups with pg_dump/mongodump + offsite copy',
+            backup: 'Automated daily backups with pg_dump/mongodump + offsite copy',
             connectionPooling: database === 'document' ? 'Mongoose pooling' : 'PgBouncer',
             replicas: availConfig.dbReplicas
         },
@@ -102,10 +86,7 @@ function getMediumArchitecture(config) {
             recommendation: 'Custom auth + Redis session store',
             oauth: 'OAuth2 providers (Google, GitHub)',
             security: 'Rate limiting, account lockout, bcrypt/argon2',
-            // Phase 2: MFA based on compliance
-            mfa: compliance.includes('hipaa') || compliance.includes('pci') 
-                ? 'Required' 
-                : compliance.includes('soc2') ? 'Recommended' : 'Optional'
+            mfa: 'Optional'
         } : null,
 
         realtime: features.includes('websocket') || app_type === 'realtime' ? {
@@ -117,7 +98,6 @@ function getMediumArchitecture(config) {
             notes: 'Configure Nginx for WebSocket upgrade'
         } : null,
 
-        // Phase 2: Availability configuration
         availability: {
             level: availability,
             sla: availability === 'standard' ? '99%' : availability === 'high' ? '99.9%' : '99.99%',
@@ -163,7 +143,6 @@ function getMediumArchitecture(config) {
             secrets: 'Environment variables, no secrets in code'
         },
 
-        // Phase 2: Cost based on resource tier
         estimatedCost: getMediumEstimatedCost(resource_tier, config.managed_level),
 
         serverRequirements: {
@@ -184,10 +163,6 @@ function getMediumArchitecture(config) {
     return architecture;
 }
 
-/**
- * Phase 2: Calculate estimated cost based on tier and managed level
- * Only Starter and Standard tiers available
- */
 function getMediumEstimatedCost(resourceTier, managedLevel) {
     const tierCosts = {
         starter: { min: 50, max: 100 },     // Starter Plan (limited for medium scale)

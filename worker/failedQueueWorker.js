@@ -1,6 +1,6 @@
 //need to done dev sied working as havent checked
 const { Worker } = require('bullmq');
-const { prisma } = require('../utils/prismaClient');
+const { prisma } = require('../clients/prismaClient');
 const buildQueue = require('../queues/buildQueue');
 require('dotenv').config({ path: '../.env' });
 const failedQueueWorker = new Worker('failedBuildQueue', async (job) => {

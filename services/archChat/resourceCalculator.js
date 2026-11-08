@@ -1,16 +1,3 @@
-/**
- * Resource Calculator - Phase 2
- * Calculates exact CPU/memory allocations based on resource tier and requirements
- * 
- * AVAILABLE PLANS:
- * 1. Starter + Standard (2 CPU, 4GB, 99% SLA)
- * 2. Standard + High (4 CPU, 8GB, 99.9% SLA)
- */
-
-/**
- * Resource tier definitions (bare metal allocations)
- * Only Starter and Standard tiers are available
- */
 const RESOURCE_TIERS = {
     starter: {
         name: 'Starter',
@@ -34,9 +21,6 @@ const RESOURCE_TIERS = {
     }
 };
 
-/**
- * Base resource requirements per container type
- */
 const CONTAINER_REQUIREMENTS = {
     app: {
         minCpu: 0.5,
@@ -79,10 +63,6 @@ const CONTAINER_REQUIREMENTS = {
     }
 };
 
-/**
- * Availability to replica mapping
- * Only Standard (99%) and High (99.9%) are available
- */
 const AVAILABILITY_CONFIG = {
     standard: {
         name: '99% SLA',
@@ -108,11 +88,6 @@ const AVAILABILITY_CONFIG = {
     }
 };
 
-/**
- * Calculate resource allocation for all containers
- * @param {Object} config - User configuration from answers
- * @returns {Object} - Resource allocation breakdown
- */
 function calculateResources(config) {
     const tier = RESOURCE_TIERS[config.resource_tier] || RESOURCE_TIERS.standard;
     const availability = AVAILABILITY_CONFIG[config.availability] || AVAILABILITY_CONFIG.standard;
@@ -135,32 +110,26 @@ function calculateResources(config) {
         warnings: []
     };
 
-    // Calculate app container resources
     const appReplicas = Math.min(availability.appReplicas, tier.maxReplicas);
     const appResources = calculateAppResources(config, tier, appReplicas);
     allocation.containers.push(appResources);
 
-    // Calculate database resources
     const dbResources = calculateDatabaseResources(config, tier, availability);
     allocation.containers.push(dbResources);
 
-    // Calculate Redis if needed
     if (config.features.includes('cache') || config.features.includes('queue')) {
         const redisResources = calculateRedisResources(config, tier, availability);
         allocation.containers.push(redisResources);
     }
 
-    // Calculate Nginx
     const nginxResources = calculateNginxResources(tier);
     allocation.containers.push(nginxResources);
 
-    // Calculate worker if background jobs needed
     if (config.features.includes('queue')) {
         const workerResources = calculateWorkerResources(config, tier);
         allocation.containers.push(workerResources);
     }
 
-    // Calculate totals
     let totalCpu = 0;
     let totalMemory = 0;
 
@@ -175,7 +144,6 @@ function calculateResources(config) {
     allocation.summary.remainingMemory = tier.memory - totalMemory;
     allocation.summary.utilizationPercent = Math.round((totalCpu / tier.cpu) * 100);
 
-    // Check for resource overflow
     if (totalCpu > tier.cpu || totalMemory > tier.memory) {
         allocation.warnings.push({
             type: 'resource_overflow',
@@ -189,7 +157,6 @@ function calculateResources(config) {
         });
     }
 
-    // Check for replica mismatch
     if (availability.appReplicas > tier.maxReplicas) {
         allocation.warnings.push({
             type: 'replica_mismatch',
@@ -202,13 +169,9 @@ function calculateResources(config) {
     return allocation;
 }
 
-/**
- * Calculate app container resources
- */
 function calculateAppResources(config, tier, replicas) {
     const base = CONTAINER_REQUIREMENTS.app;
     
-    // Adjust for app type
     let cpuMultiplier = 1;
     let memoryMultiplier = 1;
     
@@ -219,8 +182,7 @@ function calculateAppResources(config, tier, replicas) {
         cpuMultiplier = 1.2;     // API-heavy needs more CPU
     }
 
-    // Calculate based on available resources and replicas
-    const availableCpu = tier.cpu * 0.4;  // 40% for app
+    const availableCpu = tier.cpu * 0.4;
     const availableMemory = tier.memory * 0.35;  // 35% for app
     
     const cpuPerReplica = Math.max(
@@ -249,16 +211,12 @@ function calculateAppResources(config, tier, replicas) {
     };
 }
 
-/**
- * Calculate database resources
- */
 function calculateDatabaseResources(config, tier, availability) {
     const dbType = config.database === 'document' ? 'mongodb' : 'postgres';
     const base = CONTAINER_REQUIREMENTS.database[dbType];
     
-    // Database gets priority allocation
-    const cpuAllocation = tier.cpu * 0.3;  // 30% for DB
-    const memoryAllocation = tier.memory * 0.35;  // 35% for DB
+    const cpuAllocation = tier.cpu * 0.3;
+    const memoryAllocation = tier.memory * 0.35;
     
     const totalReplicas = 1 + availability.dbReplicas;
     
@@ -275,22 +233,17 @@ function calculateDatabaseResources(config, tier, availability) {
         backup: {
             enabled: true,
             frequency: 'daily',
-            retention: config.compliance.includes('hipaa') ? '6 years' : '30 days'
+            retention: '30 days'
         }
     };
 }
 
-/**
- * Calculate Redis resources
- */
 function calculateRedisResources(config, tier, availability) {
     const base = CONTAINER_REQUIREMENTS.redis;
     
-    // Redis gets smaller allocation
     const cpuAllocation = tier.cpu * 0.1;
     let memoryAllocation = tier.memory * 0.1;
     
-    // Increase Redis memory if heavy caching expected
     if (config.traffic === 'spiky') {
         memoryAllocation *= 1.5;
     }
@@ -314,9 +267,6 @@ function calculateRedisResources(config, tier, availability) {
     };
 }
 
-/**
- * Calculate Nginx resources
- */
 function calculateNginxResources(tier) {
     const base = CONTAINER_REQUIREMENTS.nginx;
     
@@ -337,9 +287,6 @@ function calculateNginxResources(tier) {
     };
 }
 
-/**
- * Calculate worker resources
- */
 function calculateWorkerResources(config, tier) {
     const base = CONTAINER_REQUIREMENTS.worker;
     
@@ -359,10 +306,6 @@ function calculateWorkerResources(config, tier) {
     };
 }
 
-/**
- * Get upgrade recommendation based on current tier
- * Only Starter and Standard tiers are available
- */
 function getUpgradeRecommendation(currentTier) {
     const upgrades = {
         starter: 'Upgrade to Standard tier (4 vCPU, 8GB RAM) for more resources and 99.9% availability',
@@ -371,54 +314,26 @@ function getUpgradeRecommendation(currentTier) {
     return upgrades[currentTier] || upgrades.starter;
 }
 
-/**
- * Get tier info
- */
 function getTierInfo(tierName) {
     return RESOURCE_TIERS[tierName] || RESOURCE_TIERS.standard;
 }
 
-/**
- * Get availability info
- */
 function getAvailabilityInfo(availabilityLevel) {
     return AVAILABILITY_CONFIG[availabilityLevel] || AVAILABILITY_CONFIG.standard;
 }
 
-/**
- * Check if configuration is feasible
- */
 function isConfigurationFeasible(config) {
     const allocation = calculateResources(config);
     return allocation.warnings.filter(w => w.severity === 'critical').length === 0;
 }
 
-/**
- * STRICT VALIDATION - Blocks invalid combinations before architecture generation
- * Returns { valid: true } or { valid: false, error, recommendation, blockedField }
- * 
- * AVAILABLE PLANS:
- * 1. Starter + Standard (2 CPU, 4GB, 99% SLA) - For MVPs
- * 2. Standard + High (4 CPU, 8GB, 99.9% SLA) - For Production
- * 
- * This is NOT a warning - it's a HARD BLOCK. User must change their selection.
- */
 function strictValidateConfiguration(config) {
     const tier = config.resource_tier || 'standard';
     const appType = config.app_type || 'webapp';
     const features = config.features || [];
     const availability = config.availability || 'standard';
     const traffic = config.traffic || 'steady';
-    const compliance = config.compliance || [];
-    const networkIsolation = config.network_isolation || 'shared';
     
-    // ═══════════════════════════════════════════════════════════════════════
-    // PLAN COMPATIBILITY CHECK
-    // Starter can only use Standard availability (99%)
-    // Standard can use both Standard (99%) and High (99.9%) availability
-    // ═══════════════════════════════════════════════════════════════════════
-    
-    // BLOCK: Starter tier with High availability (invalid plan)
     if (tier === 'starter' && availability === 'high') {
         return {
             valid: false,
@@ -442,12 +357,7 @@ function strictValidateConfiguration(config) {
         };
     }
     
-    // ═══════════════════════════════════════════════════════════════════════
-    // STARTER TIER RESOURCE RESTRICTIONS (2 CPU, 4GB RAM)
-    // ═══════════════════════════════════════════════════════════════════════
     if (tier === 'starter') {
-        
-        // BLOCK: Queue feature on Starter (adds Worker = +0.5 CPU, causes overflow)
         if (features.includes('queue')) {
             return {
                 valid: false,
@@ -471,7 +381,6 @@ function strictValidateConfiguration(config) {
             };
         }
         
-        // BLOCK: API app type with cache on Starter (100% CPU usage)
         if (appType === 'api' && features.includes('cache')) {
             return {
                 valid: false,
@@ -499,7 +408,6 @@ function strictValidateConfiguration(config) {
             };
         }
         
-        // BLOCK: Realtime app with cache AND spiky traffic on Starter
         if (appType === 'realtime' && features.includes('cache') && traffic === 'spiky') {
             return {
                 valid: false,
@@ -524,42 +432,9 @@ function strictValidateConfiguration(config) {
         }
     }
     
-    // ═══════════════════════════════════════════════════════════════════════
-    // COMPLIANCE + NETWORK RESTRICTIONS (applies to both tiers)
-    // ═══════════════════════════════════════════════════════════════════════
-    
-    // BLOCK: HIPAA/PCI on shared network
-    if ((compliance.includes('hipaa') || compliance.includes('pci')) && networkIsolation === 'shared') {
-        return {
-            valid: false,
-            blockedField: 'network_isolation',
-            blockedValue: 'shared',
-            error: `${compliance.includes('hipaa') ? 'HIPAA' : 'PCI-DSS'} compliance requires dedicated network isolation.`,
-            details: {
-                reason: 'Protected health data (HIPAA) and payment card data (PCI) cannot be on shared networks.',
-                complianceRequirement: 'Network segmentation is mandatory for these standards.',
-            },
-            recommendation: {
-                option1: {
-                    action: 'Select "Dedicated VLAN" network isolation',
-                    result: 'Meets minimum compliance requirement'
-                },
-                option2: {
-                    action: 'Select "Private Network" for maximum isolation',
-                    result: 'Fully isolated - recommended for sensitive data'
-                }
-            }
-        };
-    }
-    
-    // All validations passed
     return { valid: true };
 }
 
-/**
- * Get the valid plan combinations
- * Used by frontend to show available options
- */
 function getValidPlanCombinations() {
     return [
         {
@@ -585,10 +460,6 @@ function getValidPlanCombinations() {
     ];
 }
 
-/**
- * Quick check if a specific answer would cause a block
- * Used during question flow to warn user before they commit
- */
 function wouldAnswerCauseBlock(currentAnswers, questionId, proposedAnswer) {
     // Create temporary config with the proposed answer
     const tempConfig = { ...currentAnswers };
@@ -598,9 +469,7 @@ function wouldAnswerCauseBlock(currentAnswers, questionId, proposedAnswer) {
         'app_type': 'app_type',
         'resource_tier': 'resource_tier',
         'features': 'features',
-        'compliance': 'compliance',
         'availability': 'availability',
-        'network_isolation': 'network_isolation',
         'traffic': 'traffic'
     };
     

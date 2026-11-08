@@ -1,5 +1,5 @@
 const { promisify } = require('util');
-const { getRedisClient, isRedisAvailable } = require('../utils/redisClient');
+const { getRedisClient, isRedisAvailable } = require('../clients/redisClient');
 
 class TokenBucketLimiter {
     constructor(options = {}) {
