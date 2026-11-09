@@ -1,24 +1,21 @@
 const axios = require('axios');
 require('dotenv').config({ path: '../.env' });
-// Using dynamic import for ESM module
 let Octokit;
 
 async function createWebhookOcta(oauthToken, owner, repo) {
-    // Dynamically import Octokit
     const { Octokit: OctokitModule } = await import('@octokit/core');
     Octokit = OctokitModule;
 
-    //create octokit instance using users oAuth  token
     const octokit = new Octokit({ auth: oauthToken });
     try {
         const response = await octokit.request('POST /repos/{owner}/{repo}/hooks', {
-            owner: owner,//reppo owner whose account is being used after auth
-            repo: repo, //repoName on which webhook will be created
+            owner: owner,
+            repo: repo,
             name: 'web',
             active: true,
-            events: ['push', 'pull_request'], // Add other events as needed
+            events: ['push', 'pull_request'],
             config: {
-                url: 'https://fde7-103-252-53-110.ngrok-free.app/api/github/webhook-notifier', // Replace with your server URL
+                url: process.env.WEBHOOK_URL,
                 content_type: 'json',
                 insecure_ssl: '0'
             },
@@ -27,15 +24,11 @@ async function createWebhookOcta(oauthToken, owner, repo) {
             }
         });
 
-        // console.log('Webhook created successfully:', response.data);
     } catch (error) {
         console.error('Error creating webhook:', error);
     }
 }
 
-//   createWebhookOcta(); single call is made already
-
-//helper methods
 async function webHookOctoKitHelper(req, res) {
     const { oauthToken, owner, repo } = req.body;
 

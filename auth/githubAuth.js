@@ -39,7 +39,6 @@ function getGitHubAuthUrl(forceLogin = false) {
     return url;
 }
 
-//exchange code for access token this will return access tolem required for all activities
 async function exchangeCodeForToken(code) {
     try {
         const response = await axios.post(
@@ -65,21 +64,15 @@ async function exchangeCodeForToken(code) {
     }
 }
 
-//save access token inside database
 async function saveAccessToken(userId, accessToken) {
     try {
         const encrypted = encryptToken(accessToken);
 
-        // console.log("token encrytpion done");
-        //stringify token for storing in database
         const encryptedData = JSON.stringify({
             token: encrypted.encryptedData,
-            iv: encrypted.iv, //stoer iv with encrypted toekn for decrypt securely
+            iv: encrypted.iv,
         });
 
-        // console.log("token stringified");
-
-        //check if the user already has a token stored
         const existingToken = await prisma.oAuthToken.findUnique({
             where: { userId },
         });
@@ -111,10 +104,6 @@ async function saveAccessToken(userId, accessToken) {
 
 }
 
-//main working helpers
-// Query params:
-//   ?force=true  - Force GitHub login screen (switch accounts)
-//   (default)    - Use existing GitHub session
 async function githubRedirect(req, res) {
     try {
         const forceLogin = req.query.force === 'true';
@@ -184,7 +173,6 @@ async function githubCallback(req, res) {
     }
 }
 
-//getting user information from access
 async function getUserInfoHelper(accessToken) {
     try {
         const response = await axios.get('https://api.github.com/user', {
@@ -279,7 +267,6 @@ async function listRepositories(req, res) {
 
         const repositories = await fetchRepositoriesFromGitHub(accessToken);
 
-        //send repositories in the response
         res.json(repositories);
     }
     catch (err) {
@@ -292,7 +279,6 @@ async function listRepositories(req, res) {
 }
 
 
-//basic helper functions
 function encryptToken(token) {
     try {
         const algorithm = 'aes-256-cbc';
@@ -320,7 +306,6 @@ function encryptToken(token) {
 }
 
 
-//decrypt token when needed
 function decryptToken(encryptedData) {
     const algorithm = 'aes-256-cbc';
     const secretKey = process.env.SECRET_KEY;
@@ -337,9 +322,6 @@ function decryptToken(encryptedData) {
     return decrypted;
 }
 
-/**
- * Disconnect GitHub account - removes OAuth token from database
- */
 async function disconnectGithub(req, res) {
     try {
         const userId = req.user?.userId;

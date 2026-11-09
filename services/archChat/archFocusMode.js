@@ -1,6 +1,14 @@
 const { wouldAnswerCauseBlock } = require('./resourceCalculator');
 
-const FOCUS_MODE = process.env.ARCH_CHAT_FOCUS_MODE || 'small_starter';
+// Product decision: which plan is currently live.
+// Change ACTIVE_PLAN to unlock additional tiers once they are ready.
+// 'starter' → Starter Monolith only (current)
+// 'standard' → unlock Production Plan as well
+const ACTIVE_PLAN = 'starter';
+
+// Sent in API responses so the frontend knows which mode is active.
+// Kept stable so existing frontend code does not need updating.
+const ACTIVE_PLAN_LABEL = 'small_starter';
 
 const FOCUS_MESSAGE = 'MVP mode: Simple Monolith on Starter Plan (2 vCPU, 4 GB)';
 
@@ -78,7 +86,7 @@ const COMING_SOON_MESSAGES = {
 };
 
 function isFocusModeEnabled() {
-    return FOCUS_MODE === 'small_starter';
+    return ACTIVE_PLAN === 'starter';
 }
 
 function getFocusMeta() {
@@ -86,7 +94,7 @@ function getFocusMeta() {
         return null;
     }
     return {
-        focusMode: FOCUS_MODE,
+        focusMode: ACTIVE_PLAN_LABEL,
         focusMessage: FOCUS_MESSAGE
     };
 }

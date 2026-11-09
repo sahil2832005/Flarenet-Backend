@@ -435,31 +435,6 @@ function strictValidateConfiguration(config) {
     return { valid: true };
 }
 
-function getValidPlanCombinations() {
-    return [
-        {
-            id: 'starter_standard',
-            name: 'Starter Plan',
-            tier: 'starter',
-            availability: 'standard',
-            specs: { cpu: 2, memory: '4GB', storage: '50GB', replicas: 1 },
-            sla: '99%',
-            bestFor: 'MVPs, prototypes, dev environments',
-            priceRange: '$20-65/month'
-        },
-        {
-            id: 'standard_high',
-            name: 'Production Plan',
-            tier: 'standard',
-            availability: 'high',
-            specs: { cpu: 4, memory: '8GB', storage: '100GB', replicas: 2 },
-            sla: '99.9%',
-            bestFor: 'Production apps, growing startups, HIPAA/SOC2',
-            priceRange: '$100-230/month'
-        }
-    ];
-}
-
 function wouldAnswerCauseBlock(currentAnswers, questionId, proposedAnswer) {
     // Create temporary config with the proposed answer
     const tempConfig = { ...currentAnswers };
@@ -488,6 +463,5 @@ module.exports = {
     getAvailabilityInfo,
     isConfigurationFeasible,
     strictValidateConfiguration,
-    wouldAnswerCauseBlock,
-    getValidPlanCombinations
+    wouldAnswerCauseBlock
 };

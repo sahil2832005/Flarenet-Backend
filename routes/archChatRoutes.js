@@ -29,15 +29,6 @@ const startRateLimiter = createRateLimiter({
     failOpen: true
 });
 
-function sanitizeString(str) {
-    if (typeof str !== 'string') return str;
-    return str
-        .replace(/[<>]/g, '')
-        .replace(/javascript:/gi, '')
-        .replace(/on\w+=/gi, '')
-        .substring(0, 500);
-}
-
 function isValidProjectId(projectId) {
     if (typeof projectId !== 'string') return false;
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(projectId);
@@ -108,22 +99,6 @@ router.post('/start', verifyToken, startRateLimiter, async (req, res) => {
         });
     } catch (error) {
         console.error('[ArchChat] Start error:', error);
-
-        if (error.message === 'Project not found') {
-            return res.status(404).json({
-                success: false,
-                error: 'Project not found',
-                code: 'PROJECT_NOT_FOUND'
-            });
-        }
-        if (error.message?.includes('Unauthorized')) {
-            return res.status(403).json({
-                success: false,
-                error: 'You do not own this project',
-                code: 'UNAUTHORIZED'
-            });
-        }
-
         res.status(500).json({
             success: false,
             error: 'Failed to start chat session'

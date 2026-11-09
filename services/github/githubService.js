@@ -1,24 +1,12 @@
-// Using dynamic import for ESM module
 let Octokit;
 const { getRedisClient, isRedisAvailable } = require('../../clients/redisClient');
 
 class GitHubService {
-  /**
-   * Create a new GitHubService instance
-   * @param {Object} options - Configuration options
-   * @param {Number} options.cacheTTL - Cache time-to-live in seconds (default: 3600)
-   */
   constructor(options = {}) {
-    this.cacheTTL = options.cacheTTL || 3600; // Default 1 hour cache
+    this.cacheTTL = options.cacheTTL || 3600;
   }
 
-  /**
-   * Create an authenticated Octokit instance
-   * @param {String} token - GitHub token
-   * @returns {Object} Octokit instance
-   */
   async createOctokitClient(token) {
-    // Dynamically import Octokit if not already loaded
     if (!Octokit) {
       const { Octokit: OctokitModule } = await import('@octokit/core');
       Octokit = OctokitModule;
@@ -39,32 +27,15 @@ class GitHubService {
     });
   }
 
-  /**
-   * Get cache key for GitHub API requests
-   * @param {String} owner - Repository owner
-   * @param {String} repo - Repository name
-   * @param {String} path - File path
-   * @returns {String} Cache key
-   */
   getCacheKey(owner, repo, path) {
     return `github:repo:${owner}:${repo}:${path}`;
   }
 
-  /**
-   * Get file content from GitHub repository
-   * @param {Object} params - Request parameters
-   * @param {String} params.owner - Repository owner
-   * @param {String} params.repo - Repository name
-   * @param {String} params.path - File path
-   * @param {String} params.token - GitHub token
-   * @returns {Promise<Object>} File content
-   */
   async getFileContent({ owner, repo, path, token }) {
     if (!owner || !repo || !path) {
       throw new Error('Owner, repo and path are required');
     }
 
-    // Try to get from cache first
     const cacheKey = this.getCacheKey(owner, repo, path);
     if (isRedisAvailable()) {
       const redis = getRedisClient();
@@ -95,18 +66,10 @@ class GitHubService {
       if (response.status !== 200) {
         throw new Error(`GitHub API returned status ${response.status}`);
       }
-      else{
-        // console.log("response from github failing stepper",response);
-      }
-      
 
-      // Decode base64 content
       const content = Buffer.from(response.data.content, 'base64').toString('utf-8');
       const parsedContent = JSON.parse(content);
 
-      console.log("parsed content from github",parsedContent);
-      
-      // Cache the result if Redis is available
       if (isRedisAvailable()) {
         const redis = getRedisClient();
         await redis.set(cacheKey, JSON.stringify(parsedContent), 'EX', this.cacheTTL);
@@ -114,7 +77,6 @@ class GitHubService {
       
       return parsedContent;
     } catch (error) {
-      // Handle specific GitHub API errors
       if (error.status === 404) {
         throw new Error(`File '${path}' not found in repository ${owner}/${repo}`);
       } else if (error.status === 403 && error.response?.headers?.['x-ratelimit-remaining'] === '0') {
@@ -129,18 +91,12 @@ class GitHubService {
     }
   }
 
-  /**
-   * Parse GitHub repository URL
-   * @param {String} url - GitHub repository URL
-   * @returns {Object} Repository owner and name
-   */
   parseGitHubUrl(url) {
     if (!url) {
       throw new Error('GitHub URL is required');
     }
 
     try {
-      // Handle different GitHub URL formats
       let urlObj;
       try {
         urlObj = new URL(url);
@@ -152,7 +108,6 @@ class GitHubService {
         throw new Error('Not a GitHub URL');
       }
 
-      // Extract owner and repo from path
       const pathParts = urlObj.pathname.split('/').filter(Boolean);
       
       if (pathParts.length < 2) {

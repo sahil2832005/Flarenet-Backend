@@ -3,10 +3,9 @@ const { RunTaskCommand } = require('@aws-sdk/client-ecs');
 const { client } = require('../clients/awsClient');
 const { prisma } = require('../clients/prismaClient');
 const failedQueue = require('../queues/failedQueue');
-const { llm, memory } = require("../utils/langchainConfig"); // Import LLM instance
+const { llm, memory } = require("../utils/langchainConfig");
 const kafka = require('../clients/kafkaClient');
 const clickHouseClient = require('../clients/clickHouseClient');
-// UUID will be dynamically imported
 require('dotenv').config({ path: '../.env' });
 const axios = require('axios');
 
@@ -72,8 +71,6 @@ const classifyLogs = async (logMessage) => {
     try {
         const aiResponse = await llm.invoke(prompt);
         const responseText = aiResponse.content || aiResponse;
-
-        // console.log("AI Raw Response:", responseText); // Debugging
 
         // More flexible regex to capture newlines and unexpected spacing
         const result = responseText.match(
@@ -141,22 +138,17 @@ const deploymentWorker = new Worker('buildQueue', async (job) => {
         const [classificationLine] = validationText.split('\n').map(line => line.trim());
         const classification = classificationLine.split(':')[1]?.trim().toUpperCase();
 
-        // console.log("Validation Classification:", classification);
-
-        // ❌ Stop execution if the repo is not found
         if (classification === 'REPO_NOT_FOUND') {
             console.error(`Deployment failed: Repository does not exist or is inaccessible. Skipping this task.`);
             throw new Error("Deployment aborted: Repository does not exist.");
         }
 
-        // ❌ Stop execution if the classification is ERROR
         if (!classification || !['OK', 'WARNING'].includes(classification)) {
             const errorMessage = `Deployment validation failed (${classification}): ${validationText}`;
             console.error(errorMessage);
             throw new Error(errorMessage);
         }
 
-        // Proceed if it's a WARNING (optional)
         if (classification === 'WARNING') {
             console.warn("Proceeding with warnings:", validationText);
         }
@@ -171,8 +163,6 @@ const deploymentWorker = new Worker('buildQueue', async (job) => {
             ? job.data.buildCommand 
             : "npm install && npm run build";
         
-        // console.log("Using build command:", finalBuildCommand);
-        // Remove the AI-based build command section and continue with task execution
         // Prepare environment variables
         const environmentVariables = [
             { name: 'GIT_URI', value: gitUrl },
@@ -212,7 +202,6 @@ const deploymentWorker = new Worker('buildQueue', async (job) => {
 
         //send final command to task executor
         await client.send(command);
-        //after processng container task mark deloyment as completed
         await prisma.deployment.update({
             where: { id: deploymentId },
             data: { status: 'ACTIVE' },
@@ -220,46 +209,37 @@ const deploymentWorker = new Worker('buildQueue', async (job) => {
 
     }
     catch (err) {
-        throw err; // let worker.onError handler will handle this
-
+        throw err;
     }
 
 }, {
     connection: {
-        url: process.env.REDIS_URL, // Use REDIS_URL from environment
+        url: process.env.REDIS_URL,
     },
     limiter: {
-        max: 10, // Max jobs per second prevent queue iverload
+        max: 10,
         duration: 1000
     }
+});
+deploymentWorker.on('ready', () => {});
 
-});
-deploymentWorker.on('ready', () => {
-    // console.log('deployment Worker is ready to process jobs.');
-});
-
-deploymentWorker.on('completed', (job) => {
-    // console.log(`Job completed: ${job.id}`);
-});
+deploymentWorker.on('completed', (job) => {});
 
 deploymentWorker.on('failed', async (job, err) => {
     console.error(`Job failed: ${job.id}, Error: ${err.message}`);
 
-    //classify error log to check its tyoe so ai will understand efforts required to solve that error
     const failureType = await classifyLogs(err.message);
 
     if (failureType === "RECOVERABLE_ERROR" && job.attemptsMade < config.MAX_RETRIES) {
-        // console.log(`Retrying job ${job.id} due to recoverable error...`);
         await new Promise(resolve => setTimeout(resolve, config.RETRY_DELAY * (job.attemptsMade + 1)));
         await job.retry();
     }
     else {
         console.error(`Job failed: ${job.id}, Error: ${err.message}`);
 
-        // Call processLogMessage directly with required fields
         await processLogMessage({
             topic: 'builder-logs',
-            partition: 0, // Default partition
+            partition: 0,
             message: {
                 key: job.jobdeploymentId || 'unknown',
                 value: JSON.stringify({ deploymentId: job.deploymentId, projectId: job.projectId, gitUrl: job.gitUrl, error: err }),
@@ -296,8 +276,6 @@ const processLogMessage = async ({ topic, partition, batch, heartbeat, commitOff
         return;
     }
 
-    // console.log(`Received ${batch.messages.length} messages...`);
-
     for (const message of batch.messages) {
         if (!message.value) {
             console.warn("Skipping message with no value.");
@@ -306,7 +284,6 @@ const processLogMessage = async ({ topic, partition, batch, heartbeat, commitOff
 
         try {
             const logMessage = JSON.parse(message.value.toString());
-            // console.log('lgmsg', logMessage);
 
             // Extract deployment details safely
             const {
@@ -327,9 +304,7 @@ const processLogMessage = async ({ topic, partition, batch, heartbeat, commitOff
                 continue;
             }
 
-            // Analyze log through AI
             const { classification, reasoning } = await classifyLogs(logMessage.log);
-            // console.log("AI REASONING...", reasoning);
 
             if (classification === "CRITICAL_FAILURE") {
                 console.error("Critical failure detected. Marking deployment as failed.");
@@ -356,7 +331,6 @@ const processLogMessage = async ({ topic, partition, batch, heartbeat, commitOff
 
             // console.log(`Log received: ${log} | Deployment: ${DEPLOYMENT_ID} | Project: ${PROJECT_ID}`);
 
-            // Insert log into ClickHouse
             const logEntry = {
                 event_id: uuidv4(),
                 project_id: PROJECT_ID,
@@ -379,21 +353,17 @@ const processLogMessage = async ({ topic, partition, batch, heartbeat, commitOff
                 reasoning: reasoning,
             };
 
-            const { query_id: logQueryId } = await clickHouseClient.insert({
+            await clickHouseClient.insert({
                 table: 'deployment_logs',
                 values: [logEntry],
                 format: 'JSONEachRow',
             });
 
-            // console.log(`Log inserted to ClickHouse with query ID:`);
-
-            const { query_id: aiQueryId } = await clickHouseClient.insert({
+            await clickHouseClient.insert({
                 table: 'deployment_ai_analysis',
                 values: [aiEntry],
                 format: 'JSONEachRow',
             });
-
-            // console.log(`AI analysis inserted into ClickHouse with query ID:`);
 
             resolveOffset(message.offset);
             await commitOffsetsIfNecessary(message.offset);
@@ -408,7 +378,6 @@ const processLogMessage = async ({ topic, partition, batch, heartbeat, commitOff
 
 (async () => {
     await consumer.connect();
-    // console.log("Receiver connected...");
     await consumer.subscribe({ topic: 'builder-logs', fromBeginning: true });
-    await consumer.run({ eachBatch: processLogMessage }); // Changed to `eachBatch`
+    await consumer.run({ eachBatch: processLogMessage });
 })();
