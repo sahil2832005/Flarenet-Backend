@@ -1,6 +1,5 @@
 const { getSmallArchitecture, getMediumArchitecture, getLargeArchitecture } = require('./templates');
 const { calculateResources, RESOURCE_TIERS, AVAILABILITY_CONFIG, strictValidateConfiguration } = require('./resourceCalculator');
-const { isFocusModeEnabled } = require('./archFocusMode');
 
 const STARTER_FEATURES = ['auth', 'cache', 'search', 'files', 'websocket'];
 
@@ -51,9 +50,7 @@ function generateArchitecture(answers) {
 
     architecture.generatedAt = new Date().toISOString();
     architecture.inputConfig = config;
-    if (isFocusModeEnabled()) {
-        architecture.starterPlan = buildStarterPlan(config);
-    }
+    architecture.starterPlan = buildStarterPlan(config);
 
     return architecture;
 }
@@ -75,44 +72,22 @@ function buildStarterPlan(config) {
 
 function normalizeConfig(answers) {
     const features = Array.isArray(answers.features) ? answers.features : [];
-    const config = {
-        app_type: answers.app_type || 'webapp',
-        scale: answers.scale || 'small',
-        database: answers.database || 'relational',
-        features: [...new Set(features)],
-        traffic: answers.traffic || 'steady',
-        budget: answers.budget || (isFocusModeEnabled() ? 'minimal' : 'moderate'),
-        resource_tier: answers.resource_tier || (isFocusModeEnabled() ? 'starter' : 'standard'),
-        team_size: answers.team_size || (isFocusModeEnabled() ? 'solo' : 'small'),
-        availability: answers.availability || 'standard',
+    return {
+        app_type:      answers.app_type      || 'webapp',
+        scale:         answers.scale         || 'small',
+        database:      answers.database      || 'relational',
+        features:      [...new Set(features)],
+        traffic:       answers.traffic       || 'steady',
+        budget:        answers.budget        || 'minimal',
+        resource_tier: answers.resource_tier || 'starter',
+        team_size:     answers.team_size     || 'solo',
+        availability:  answers.availability  || 'standard',
         managed_level: answers.managed_level || 'templates_only'
     };
-
-    if (!isFocusModeEnabled()) {
-        return config;
-    }
-
-    config.app_type = 'webapp';
-    config.scale = 'small';
-    config.resource_tier = 'starter';
-    config.database = 'relational';
-    config.traffic = 'steady';
-    config.availability = 'standard';
-    config.team_size = 'solo';
-    config.managed_level = 'templates_only';
-    config.budget = 'minimal';
-    config.features = config.features.filter((feature) => STARTER_FEATURES.includes(feature));
-    for (const required of ['auth', 'cache']) {
-        if (!config.features.includes(required)) {
-            config.features.push(required);
-        }
-    }
-    return config;
 }
 
 function crossValidateConfig(config) {
     const warnings = [];
-    const recommendations = [];
 
     // Rule: Resource tier vs Availability
     const tier = RESOURCE_TIERS[config.resource_tier];
@@ -163,7 +138,7 @@ function crossValidateConfig(config) {
         });
     }
 
-    return { warnings, recommendations, isValid: warnings.filter(w => w.severity === 'critical').length === 0 };
+    return { warnings, isValid: warnings.filter(w => w.severity === 'critical').length === 0 };
 }
 
 function getAvailabilityConfig(config) {
@@ -190,9 +165,6 @@ function getAvailabilityConfig(config) {
     };
 }
 
-/**
- * Apply contextual rules to modify architecture
- */
 function applyContextualRules(architecture, config) {
     const warnings = [];
     const recommendations = [];
@@ -260,44 +232,6 @@ function applyContextualRules(architecture, config) {
     return architecture;
 }
 
-/**
- * Get a quick summary for the chat
- */
-function getQuickSummary(architecture) {
-    const stack = [];
-
-    if (architecture.backend) {
-        stack.push(`Backend: ${architecture.backend.framework}`);
-    }
-    if (architecture.database?.primary) {
-        stack.push(`Database: ${architecture.database.primary.type}`);
-    }
-    if (architecture.cache) {
-        stack.push(`Cache: ${architecture.cache.type}`);
-    }
-    if (architecture.deployment) {
-        stack.push(`Deploy: ${architecture.deployment.platform}`);
-    }
-
-    return {
-        name: architecture.name,
-        tier: architecture.tier,
-        stack,
-        cost: architecture.estimatedCost?.range || 'Variable'
-    };
-}
-
-/**
- * Validate if config is complete for generation
- */
-function isConfigComplete(answers) {
-    const required = ['app_type', 'scale', 'database', 'features', 'traffic', 'budget'];
-    return required.every(key => answers.hasOwnProperty(key));
-}
-
-/**
- * Format a blocked validation result into a user-friendly message
- */
 function formatBlockedMessage(validation) {
     const { error, blockedField, blockedValue, recommendation } = validation;
 
@@ -316,10 +250,6 @@ function formatBlockedMessage(validation) {
     return message;
 }
 
-/**
- * Check if a proposed answer would be blocked BEFORE user commits
- * Used by chat flow to warn user in real-time
- */
 function validateProposedAnswer(currentAnswers, questionId, proposedAnswer) {
     const { wouldAnswerCauseBlock } = require('./resourceCalculator');
     return wouldAnswerCauseBlock(currentAnswers, questionId, proposedAnswer);
@@ -329,8 +259,6 @@ module.exports = {
     generateArchitecture,
     normalizeConfig,
     crossValidateConfig,
-    getQuickSummary,
-    isConfigComplete,
     getAvailabilityConfig,
     formatBlockedMessage,
     validateProposedAnswer

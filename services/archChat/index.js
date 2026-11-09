@@ -36,7 +36,7 @@ async function startChat(projectId, userId = null) {
         return access;
     }
 
-    const session = await sessionStore.createSession(projectId, userId);
+    const session = await sessionStore.createSession(projectId);
     const firstStep = chatFlow.getFirstStep();
 
     return {
@@ -260,8 +260,8 @@ async function resetSession(projectId, userId = null) {
 }
 
 async function initialize() {
-    const focus = archFocusMode.isFocusModeEnabled();
-    console.log(`[ArchChat] Service initialized (PostgreSQL storage, focusMode=${focus ? 'small_starter' : 'off'})`);
+    const { focusMode } = archFocusMode.getFocusMeta();
+    console.log(`[ArchChat] Service initialized (PostgreSQL storage, focusMode=${focusMode})`);
 }
 
 async function getStats() {

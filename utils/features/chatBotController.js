@@ -99,20 +99,15 @@ function extractDirectInfo(message) {
 
 const chatbotController = async (req, res) => {
     try {
-        // Handle both message and messgae typo in requests
         const message = req.body.message || req.body.messgae || '';
         const userId = req.body.userId;
 
         if (!userId) return res.status(400).json({ message: "User ID is required." });
-        console.log("userId is present from request body", userId);
 
         let session = await getUserSession(userId);
-        console.log("Current session:", session);
 
-        // Auto-set ownerId to userId if not already set
         if (!session.ownerId) {
             session.ownerId = userId.toString();
-            console.log("Auto-set ownerId to userId:", userId);
         }
 
         // First try direct extraction from the message
@@ -128,7 +123,6 @@ const chatbotController = async (req, res) => {
         });
 
         if (updatedDirectly) {
-            console.log("Session updated with directly extracted values");
             await saveUserSession(userId, session);
         }
 
@@ -195,9 +189,6 @@ Return ONLY this JSON object:
                 };
             }
 
-            console.log("Newly extracted params:", userParams);
-
-            // Update session with new valid parameters
             let updatedValues = false;
             Object.entries(userParams).forEach(([key, value]) => {
                 if (value && value !== "null" && value !== session[key]) {
@@ -209,7 +200,6 @@ Return ONLY this JSON object:
 
             if (updatedValues) {
                 await saveUserSession(userId, session);
-                console.log("Session updated with new values");
             }
         }
 
@@ -286,30 +276,22 @@ Please confirm if you want to proceed with the deployment (reply with 'yes' or '
             data: { name: session.name, gitUrl: session.gitUrl, description: session.description, ownerId: parseInt(session.ownerId) },
         });
 
-        console.log("project created");
-
         const createdDeployment = await prisma.deployment.create({
             data: { projectId: createdProject.id, status: "PENDING" },
         });
 
-        console.log("deployment created");
-
-        // Queue the deployment
         await buildQueue.add('deploy', {
             deploymentId: createdDeployment.id,
             gitUrl: session.gitUrl,
             projectId: createdProject.id
         });
 
-        console.log("deployment updated by adding job");
-
-        // Clear session after successful deployment
         await redis.del(`session:${userId}`);
 
-        return res.json({ reply: `✅ Your project "${session.name}" has been successfully added to the build queue! 🎉` });
+        return res.json({ reply: `Your project "${session.name}" has been successfully added to the build queue.` });
 
     } catch (error) {
-        console.error("❌ Error:", error);
+        console.error("Error:", error);
         res.status(500).json({ message: "Internal server error." });
     }
 };
@@ -318,7 +300,6 @@ Please confirm if you want to proceed with the deployment (reply with 'yes' or '
 const getUserSession = async (userId) => {
     const session = await redis.get(`session:${userId}`);
     if (session) {
-        console.log("user identified through cache");
         const parsedSession = JSON.parse(session);
         // Ensure askedParams is an array before converting to Set
         parsedSession.askedParams = new Set(Array.isArray(parsedSession.askedParams) ? parsedSession.askedParams : []);
@@ -334,7 +315,6 @@ const getUserSession = async (userId) => {
 };
 
 const saveUserSession = async (userId, session) => {
-    // Convert Set to Array for JSON serialization
     const sessionToSave = {
         ...session,
         askedParams: Array.from(session.askedParams)

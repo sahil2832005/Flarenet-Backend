@@ -1,6 +1,3 @@
-/**
- * Format a detailed architecture response for the UI.
- */
 function formatFullResponse(architecture) {
     return {
         summary: {
@@ -306,9 +303,6 @@ function formatComponents(architecture) {
     return components.map(withDiagramMeta);
 }
 
-/**
- * Generate simple text diagram
- */
 function generateTextDiagram(architecture) {
     if (architecture.tier === 'small') {
         return `
@@ -378,9 +372,6 @@ function generateTextDiagram(architecture) {
 `;
 }
 
-/**
- * Get tier description
- */
 function getTierDescription(tier) {
     const descriptions = {
         small: 'Simple self-hosted architecture perfect for MVPs and small applications. Single server setup.',
@@ -390,22 +381,6 @@ function getTierDescription(tier) {
     return descriptions[tier] || descriptions.small;
 }
 
-/**
- * Get warning type label
- */
-function getWarningLabel(type) {
-    const labels = {
-        consideration: 'Consideration',
-        complexity: 'Complexity',
-        budget: 'Budget',
-        scaling: 'Scaling'
-    };
-    return labels[type] || 'Warning';
-}
-
-/**
- * Generate next steps
- */
 function generateNextSteps(architecture) {
     const steps = [];
 

@@ -1,14 +1,5 @@
-/**
- * Session Store for Architecture Chat
- * Uses PostgreSQL via Prisma - linked to Project
- */
-
 const { prisma } = require('../../clients/prismaClient');
 
-/**
- * Load a project and require the caller to own it.
- * Returns { project } or { error, code }.
- */
 async function requireProjectOwner(projectId, userId) {
     if (userId === null || userId === undefined || userId === '') {
         return {
@@ -38,25 +29,13 @@ async function requireProjectOwner(projectId, userId) {
     return { project };
 }
 
-/**
- * Create or reset architecture session for a project
- * Called when user starts the questionnaire
- */
-async function createSession(projectId, userId = null) {
-    const access = await requireProjectOwner(projectId, userId);
-    if (access.error) {
-        const error = new Error(access.error);
-        error.code = access.code;
-        throw error;
-    }
-
-    const project = await prisma.project.findUnique({
-        where: { id: projectId },
-        include: { architecture: true }
+async function createSession(projectId) {
+    const existing = await prisma.projectArchitecture.findUnique({
+        where: { projectId }
     });
 
     // If architecture record exists, reset it for re-run
-    if (project.architecture) {
+    if (existing) {
         const reset = await prisma.projectArchitecture.update({
             where: { projectId },
             data: {
@@ -93,10 +72,6 @@ async function createSession(projectId, userId = null) {
     return mapToSession(architecture);
 }
 
-/**
- * Get session by project ID
- * Returns null if no architecture record exists
- */
 async function getSession(projectId) {
     const architecture = await prisma.projectArchitecture.findUnique({
         where: { projectId }
@@ -106,9 +81,6 @@ async function getSession(projectId) {
     return mapToSession(architecture);
 }
 
-/**
- * Update session with new answer or state change
- */
 async function updateSession(projectId, updates) {
     const { currentStep, answers, completed, result, reset } = updates;
 
@@ -171,18 +143,12 @@ async function updateSession(projectId, updates) {
     return mapToSession(updated);
 }
 
-/**
- * Delete architecture record for a project
- */
 async function deleteSession(projectId) {
     await prisma.projectArchitecture.delete({
         where: { projectId }
     }).catch(() => null); // Ignore if not found
 }
 
-/**
- * Get stats for debugging
- */
 async function getStats() {
     const [total, inProgress, completed] = await Promise.all([
         prisma.projectArchitecture.count(),
@@ -198,10 +164,6 @@ async function getStats() {
     };
 }
 
-/**
- * Map database record to session format
- * This keeps compatibility with existing service layer
- */
 function mapToSession(arch) {
     // Build answers object from individual columns
     const answers = {};
@@ -218,7 +180,7 @@ function mapToSession(arch) {
     if (arch.managedLevel) answers.managed_level = arch.managedLevel;
 
     return {
-        id: arch.projectId,           // Use projectId as session ID
+        id: arch.projectId,
         projectId: arch.projectId,
         userId: null,                  // Not stored in this table
         currentStep: arch.currentStep || 'app_type',
