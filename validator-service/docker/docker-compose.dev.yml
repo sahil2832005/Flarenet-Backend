@@ -1,0 +1,23 @@
+version: "3.9"
+
+# Local development compose for the validator worker.
+# The Node.js backend (and its PostgreSQL) runs separately in the main repo.
+# This file starts only the validator worker process.
+#
+# Usage:
+#   docker compose -f docker/docker-compose.dev.yml up --build
+
+services:
+  worker:
+    build:
+      context: ..           # validator-service/ root
+      dockerfile: docker/validator.Dockerfile
+    image: flarenet/validator:dev
+    command: ["worker"]
+    env_file:
+      - ../.env.example     # copy to ../.env and fill in real values
+    volumes:
+      # Expose the host Docker socket so the worker can spawn containers.
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
+    network_mode: host      # shares host network — can reach PostgreSQL on localhost
