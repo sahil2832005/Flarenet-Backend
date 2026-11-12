@@ -126,6 +126,33 @@ enum ArchitectureStatus {
   COMPLETED
 }
 
+model ValidationJob {
+  id          String    @id @db.Uuid
+  repoUrl     String    @map("repo_url")
+  status      String    @default("pending")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  startedAt   DateTime? @map("started_at")
+  finishedAt  DateTime? @map("finished_at")
+  result      Json?
+  error       String?
+  attempts    Int       @default(0)
+
+  @@index([status, createdAt])
+  @@map("validation_jobs")
+}
+
+model ValidatedProject {
+  id          String   @id @db.Uuid
+  repoUrl     String   @map("repo_url")
+  repoSha     String   @unique @map("repo_sha")
+  snapshotKey String   @map("snapshot_key")
+  manifest    Json
+  signature   String
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("validated_projects")
+}
+
 model ProjectArchitecture {
   id             String             @id @default(uuid()) @db.Uuid
   projectId      String             @unique @db.Uuid

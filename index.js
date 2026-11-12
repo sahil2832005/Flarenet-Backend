@@ -21,6 +21,7 @@ const aiAnalysisRoutes = require('./routes/aiAnalysisRoutes');
 const projectRoutes = require('./routes/projectRoutes');
 const deployRoutes = require('./routes/deployRoutes');
 const logRoutes = require('./routes/logRoutes');
+const validationRoutes = require('./routes/validationRoutes');
 
 const PORT = 5000;
 const app = express();
@@ -95,6 +96,7 @@ app.use('/api/validdeployment', deploymentValidationRoutes);
 app.use('/api/ai-analysis', aiAnalysisRoutes);
 app.use('/api/llm', chatbotRoutes);
 app.use('/api/arch-chat', archChatRoutes);
+app.use('/api/validate', validationRoutes);
 app.use(projectRoutes);
 app.use(deployRoutes);
 app.use(logRoutes);
